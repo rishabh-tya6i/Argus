@@ -277,3 +277,63 @@ class SandboxArtifact(Base):
     storage_path: Mapped[str] = mapped_column(String(512), nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
 
+
+class SecurityScanStatus(str, enum.Enum):
+    queued = "queued"
+    running = "running"
+    completed = "completed"
+    failed = "failed"
+
+
+class SecurityIssueSeverity(str, enum.Enum):
+    CRITICAL = "CRITICAL"
+    HIGH = "HIGH"
+    MEDIUM = "MEDIUM"
+    LOW = "LOW"
+
+
+class SecurityScanRun(Base):
+    __tablename__ = "security_scan_runs"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True)
+
+    url: Mapped[str] = mapped_column(Text, nullable=False)
+    status: Mapped[SecurityScanStatus] = mapped_column(Enum(SecurityScanStatus), default=SecurityScanStatus.queued, nullable=False)
+
+    started_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    finished_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+
+    score: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    summary: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+
+    issues: Mapped[list["SecurityScanIssue"]] = relationship("SecurityScanIssue", back_populates="run", cascade="all,delete-orphan")
+    artifacts: Mapped[list["SecurityScanArtifact"]] = relationship("SecurityScanArtifact", back_populates="run", cascade="all,delete-orphan")
+
+
+class SecurityScanIssue(Base):
+    __tablename__ = "security_scan_issues"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    run_id: Mapped[int] = mapped_column(ForeignKey("security_scan_runs.id", ondelete="CASCADE"), nullable=False, index=True)
+
+    severity: Mapped[SecurityIssueSeverity] = mapped_column(Enum(SecurityIssueSeverity), nullable=False)
+    category: Mapped[str] = mapped_column(String(64), nullable=False) 
+    description: Mapped[str] = mapped_column(Text, nullable=False)
+    remediation: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    
+    run: Mapped["SecurityScanRun"] = relationship("SecurityScanRun", back_populates="issues")
+
+
+class SecurityScanArtifact(Base):
+    __tablename__ = "security_scan_artifacts"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    run_id: Mapped[int] = mapped_column(ForeignKey("security_scan_runs.id", ondelete="CASCADE"), nullable=False, index=True)
+
+    artifact_type: Mapped[str] = mapped_column(String(64), nullable=False)
+    storage_path: Mapped[str] = mapped_column(String(512), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    
+    run: Mapped["SecurityScanRun"] = relationship("SecurityScanRun", back_populates="artifacts")
+

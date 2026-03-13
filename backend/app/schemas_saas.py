@@ -5,7 +5,7 @@ from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, EmailStr, Field
 
-from .db_models import UserRole, TenantStatus, AlertStatus, SandboxStatus
+from .db_models import UserRole, TenantStatus, AlertStatus, SandboxStatus, SecurityScanStatus, SecurityIssueSeverity
 
 
 class TokenResponse(BaseModel):
@@ -176,6 +176,50 @@ class SandboxEventResponse(BaseModel):
     event_type: str
     timestamp: datetime
     data: Dict[str, Any]
+
+    class Config:
+        from_attributes = True
+
+
+class SecurityScanCreateRequest(BaseModel):
+    url: str
+
+
+class SecurityScanIssueResponse(BaseModel):
+    id: int
+    run_id: int
+    severity: SecurityIssueSeverity
+    category: str
+    description: str
+    remediation: Optional[str]
+
+    class Config:
+        from_attributes = True
+
+
+class SecurityScanArtifactResponse(BaseModel):
+    id: int
+    run_id: int
+    artifact_type: str
+    storage_path: str
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class SecurityScanResponse(BaseModel):
+    id: int
+    tenant_id: int
+    url: str
+    status: SecurityScanStatus
+    started_at: Optional[datetime]
+    finished_at: Optional[datetime]
+    score: Optional[int]
+    summary: Optional[str]
+    
+    issues: List[SecurityScanIssueResponse] = Field(default_factory=list)
+    artifacts: List[SecurityScanArtifactResponse] = Field(default_factory=list)
 
     class Config:
         from_attributes = True

@@ -11,6 +11,7 @@ export const DashboardLayout = () => {
     { label: 'Dashboard', path: '/', icon: LayoutDashboard },
     { label: 'Scans', path: '/scans', icon: Search },
     { label: 'Sandbox', path: '/sandbox', icon: Box },
+    { label: 'Security Scanner', path: '/security-scanner', icon: ShieldAlert },
     { label: 'Threat Intel', path: '/intel', icon: ShieldAlert },
     { label: 'Admin', path: '/admin', icon: Settings },
   ];

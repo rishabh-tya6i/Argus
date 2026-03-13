@@ -15,6 +15,7 @@ from .routers_api_keys import router as api_keys_router
 from .routers_scans import router as scans_router
 from .routers_intel import router as intel_router
 from .routers_sandbox import router as sandbox_router
+from .routers_security_scans import router as security_scans_router
 from .sandbox.queue import enqueue_sandbox_run
 
 API_PORT = int(os.environ.get("API_PORT", "8000"))
@@ -52,6 +53,7 @@ app.include_router(api_keys_router)
 app.include_router(scans_router)
 app.include_router(intel_router)
 app.include_router(sandbox_router)
+app.include_router(security_scans_router)
 
 
 @app.get("/api/health", response_model=HealthResponse)
