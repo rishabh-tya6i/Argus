@@ -1,0 +1,43 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+rule_files:
+  - "alert_rules.yml"
+
+# Alertmanager configuration (update endpoints as needed)
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: []
+          # - alertmanager:9093
+
+scrape_configs:
+  # -----------------------------------------------------------------------
+  # Static config: local development
+  # -----------------------------------------------------------------------
+  - job_name: "argus_api"
+    static_configs:
+      - targets: ["localhost:8000"]
+    metrics_path: "/metrics"
+
+  # -----------------------------------------------------------------------
+  # Docker / service-discovery: works when argus-api resolves via DNS
+  # -----------------------------------------------------------------------
+  - job_name: "argus_api_docker"
+    dns_sd_configs:
+      - names: ["argus-api"]
+        type: A
+        port: 8000
+    metrics_path: "/metrics"
+
+  # -----------------------------------------------------------------------
+  # Kubernetes pod discovery (optional — requires k8s RBAC)
+  # -----------------------------------------------------------------------
+  # - job_name: "argus_api_k8s"
+  #   kubernetes_sd_configs:
+  #     - role: pod
+  #   relabel_configs:
+  #     - source_labels: [__meta_kubernetes_pod_label_app]
+  #       action: keep
+  #       regex: argus-api

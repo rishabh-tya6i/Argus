@@ -11,6 +11,8 @@ interface and basic upsert logic.
 
 from __future__ import annotations
 
+import logging
+import traceback
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import Iterable, List, Optional
@@ -22,6 +24,19 @@ from backend.app.db_models import DomainReputation, ThreatFeedEntry, TenantDomai
 from backend.app.services.domain_intel import detect_typosquatting, detect_homograph, get_domain_enrichment, normalize_domain
 from backend.app.services.notifications import dispatch_impersonation_alerts
 from backend.app.services.scans import trigger_auto_scan
+from backend.app.observability import (
+    tracer,
+    set_correlation_ctx,
+    get_correlation_ctx,
+    update_worker_heartbeat,
+    THREAT_INTEL_ALERTS_TOTAL,
+    WORKER_FAILURES_TOTAL,
+    QUEUE_JOBS_TOTAL,
+)
+
+logger = logging.getLogger(__name__)
+
+_WORKER = "threat_feed"
 
 
 @dataclass
@@ -122,6 +137,20 @@ def process_threat_alert(
     db.commit()
     db.refresh(alert)
 
+    # Emit metric for generated threat alert
+    THREAT_INTEL_ALERTS_TOTAL.labels(detection_type=detection_type).inc()
+    set_correlation_ctx(detection_type=detection_type, url_domain=suspicious_domain)
+    logger.info(
+        "Threat alert generated",
+        extra={
+            **get_correlation_ctx(),
+            "event": "threat_alert_generated",
+            "detection_type": detection_type,
+            "risk_score": final_score,
+            "suspicious_domain": suspicious_domain,
+        },
+    )
+
     # Actions Pipeline
     dispatch_impersonation_alerts(db, [alert])
     if final_score >= 0.7:
@@ -138,7 +167,7 @@ def _create_impersonation_alerts_for_domain(db: Session, suspicious_domain: str)
 
     suspicious_domain = normalize_domain(suspicious_domain)
     suspicious_homograph = detect_homograph(suspicious_domain)
-    
+
     for watch in watches:
         typosquats = detect_typosquatting(suspicious_domain, [watch.domain])
         if typosquats:
@@ -151,14 +180,47 @@ def _create_impersonation_alerts_for_domain(db: Session, suspicious_domain: str)
 
 
 def ingest_feeds(db: Session, sources: List[ThreatFeedSource]) -> None:
-    for source in sources:
-        for record in source.fetch():
-            upsert_threat_entry(db, record)
-            _create_impersonation_alerts_for_domain(db, suspicious_domain=record.domain)
+    with tracer.start_as_current_span("threat_feed.ingest") as span:
+        span.set_attribute("worker", _WORKER)
+        set_correlation_ctx(worker_name=_WORKER)
+        for source in sources:
+            update_worker_heartbeat(_WORKER)
+            try:
+                for record in source.fetch():
+                    try:
+                        upsert_threat_entry(db, record)
+                        _create_impersonation_alerts_for_domain(db, suspicious_domain=record.domain)
+                        QUEUE_JOBS_TOTAL.labels(worker=_WORKER, status="success").inc()
+                    except Exception as exc:
+                        QUEUE_JOBS_TOTAL.labels(worker=_WORKER, status="failed").inc()
+                        WORKER_FAILURES_TOTAL.labels(worker=_WORKER).inc()
+                        logger.error(
+                            "Threat feed record processing error",
+                            extra={
+                                **get_correlation_ctx(),
+                                "event": "worker_processing_error",
+                                "worker_name": _WORKER,
+                                "error": str(exc),
+                                "traceback": traceback.format_exc(),
+                            },
+                        )
+            except Exception as exc:
+                WORKER_FAILURES_TOTAL.labels(worker=_WORKER).inc()
+                logger.error(
+                    "Threat feed source fetch error",
+                    extra={
+                        **get_correlation_ctx(),
+                        "event": "worker_processing_error",
+                        "worker_name": _WORKER,
+                        "error": str(exc),
+                        "traceback": traceback.format_exc(),
+                    },
+                )
 
 
 def main() -> None:  # pragma: no cover - manual execution entrypoint
     init_db()
+    set_correlation_ctx(worker_name=_WORKER)
     db = SessionLocal()
     try:
         sources: List[ThreatFeedSource] = []  # populate with real sources
@@ -169,4 +231,3 @@ def main() -> None:  # pragma: no cover - manual execution entrypoint
 
 if __name__ == "__main__":  # pragma: no cover
     main()
-
