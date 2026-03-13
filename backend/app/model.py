@@ -13,6 +13,7 @@ from sklearn.compose import ColumnTransformer
 from .features import extract_features
 from .schemas import PredictResponse, Explanation, ModelScores
 from .heuristics import generate_heuristic_reasons
+from .services.domain_intel import evaluate_domain_for_url
 
 # --- Configuration ---
 MODEL_PATH = os.environ.get("MODEL_PATH", "backend/models/model.joblib")
@@ -96,7 +97,13 @@ class EnsembleModel:
         self.classical_pipeline = pipe
         print("Classical model trained and saved.")
 
-    async def predict(self, url: str, html: Optional[str], screenshot: Optional[str]) -> PredictResponse:
+    async def predict(
+        self,
+        url: str,
+        html: Optional[str],
+        screenshot: Optional[str],
+        db: Optional["Session"] = None,  # type: ignore[name-defined]
+    ) -> PredictResponse:
         # Check cache (URL only for simplicity)
         if url in self.cache:
             return self.cache[url]
@@ -118,12 +125,29 @@ class EnsembleModel:
 
         # 5. Ensemble Fusion (Simple Weighted Average for now)
         # Weights: Classical=0.3, URL=0.3, HTML=0.2, Visual=0.2
-        final_score = (
-            (prob_classical * 0.3) +
-            (prob_url * 0.3) +
-            (prob_html * 0.2) +
-            (prob_visual * 0.2)
+        base_score = (
+            (prob_classical * 0.3)
+            + (prob_url * 0.3)
+            + (prob_html * 0.2)
+            + (prob_visual * 0.2)
         )
+
+        # 6. Domain reputation / threat intelligence enrichment.
+        # If a DB session is available we compute a domain-specific risk contribution.
+        domain_risk_score = 0.0
+        domain_reasons = []
+        if db is not None:
+            try:
+                _domain, domain_risk_score, domain_reasons = evaluate_domain_for_url(db, url)
+            except Exception:
+                # Domain intel is best-effort; never break predictions if unavailable.
+                domain_risk_score = 0.0
+                domain_reasons = []
+
+        # Blend domain risk into the final score with a modest weight.
+        final_score = base_score
+        if domain_risk_score > 0:
+            final_score = max(0.0, min(1.0, 0.85 * base_score + 0.15 * domain_risk_score))
 
         prediction = "phishing" if final_score > 0.5 else "safe"
 
@@ -140,6 +164,7 @@ class EnsembleModel:
 
         # Heuristic, rule-based explanations (hidden forms, redirects, obfuscated JS, etc.)
         heuristic_reasons = generate_heuristic_reasons(url, html)
+        heuristic_reasons.extend(domain_reasons)
         # Also surface top heuristic messages as human-readable important features
         for reason in heuristic_reasons[:3]:
             important_features.append(reason.message)

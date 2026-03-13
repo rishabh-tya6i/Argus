@@ -4,11 +4,12 @@ from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.orm import Session
 
 from .db import get_db
-from .db_models import Scan, ScanResult, ScanMetadata
+from .db_models import Scan, ScanResult, ScanMetadata, Tenant, SandboxRun, SandboxStatus
 from .dependencies import get_current_user_optional, get_api_key_context, CurrentTenant
 from .model import model_instance
 from .schemas import PredictRequest, PredictResponse
 from .schemas_saas import ScanSummaryResponse, ScanDetailResponse
+from .sandbox.queue import enqueue_sandbox_run
 
 
 router = APIRouter(tags=["scans"])
@@ -118,13 +119,13 @@ async def scan_url(
     if tenant_id is None:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Tenant context required")
 
-    res = await model_instance.predict(req.url, req.html, req.screenshot)
+    res = await model_instance.predict(req.url, req.html, req.screenshot, db=db)
 
     user = getattr(request.state, "user", None)
     user_id = user.id if user is not None else None
     source = getattr(req, "source", None) if hasattr(req, "source") else None
 
-    _persist_scan(
+    scan_id = _persist_scan(
         db=db,
         tenant_id=tenant_id,
         url=req.url,
@@ -134,5 +135,21 @@ async def scan_url(
         user_id=user_id,
     )
 
-    return res
+    # Auto-enqueue sandbox analysis if above tenant threshold
+    tenant = db.get(Tenant, tenant_id)
+    if tenant:
+        config = tenant.config or {}
+        sandbox_threshold = float(config.get("sandbox_threshold", 0.85))
+        if res.confidence >= sandbox_threshold:
+            run = SandboxRun(
+                tenant_id=tenant_id,
+                scan_id=scan_id,
+                url=req.url,
+                status=SandboxStatus.queued,
+            )
+            db.add(run)
+            db.commit()
+            db.refresh(run)
+            enqueue_sandbox_run(run.id)
 
+    return res
