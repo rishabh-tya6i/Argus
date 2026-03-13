@@ -16,6 +16,7 @@ from sqlalchemy import (
     JSON,
     String,
     Text,
+    Float,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -125,7 +126,7 @@ class ScanResult(Base):
     scan_id: Mapped[int] = mapped_column(ForeignKey("scans.id", ondelete="CASCADE"), nullable=False, unique=True)
 
     prediction: Mapped[str] = mapped_column(String(32), nullable=False)
-    confidence: Mapped[float] = mapped_column(Integer, nullable=False)
+    confidence: Mapped[float] = mapped_column(Float, nullable=False)
     explanation: Mapped[Dict[str, Any]] = mapped_column(JSON, nullable=False)
 
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
@@ -164,4 +165,115 @@ class AuditLog(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False, index=True)
 
     user: Mapped[Optional["User"]] = relationship("User", back_populates="audit_logs")
+
+
+class DomainReputation(Base):
+    __tablename__ = "domain_reputation"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    domain: Mapped[str] = mapped_column(String(255), unique=True, nullable=False, index=True)
+
+    risk_score: Mapped[float] = mapped_column(Float, default=0.0, nullable=False)
+    domain_age_days: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    registrar: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    whois_privacy_enabled: Mapped[Optional[bool]] = mapped_column(Boolean, nullable=True)
+    flags: Mapped[Dict[str, Any]] = mapped_column(JSON, default=dict)
+
+    first_seen_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    last_seen_at: Mapped[datetime] = mapped_column(
+        DateTime,
+        default=datetime.utcnow,
+        onupdate=datetime.utcnow,
+        nullable=False,
+    )
+
+
+class ThreatFeedEntry(Base):
+    __tablename__ = "threat_feed_entries"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    domain: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
+    source: Mapped[str] = mapped_column(String(128), nullable=False)
+    threat_type: Mapped[str] = mapped_column(String(64), nullable=False)
+    confidence: Mapped[float] = mapped_column(Float, default=1.0, nullable=False)
+    first_seen_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+
+
+class TenantDomainWatch(Base):
+    __tablename__ = "tenant_domain_watch"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True)
+
+    domain: Mapped[str] = mapped_column(String(255), nullable=False)
+    brand_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+
+
+class AlertStatus(str, enum.Enum):
+    open = "open"
+    ignored = "ignored"
+    resolved = "resolved"
+
+
+class DomainImpersonationAlert(Base):
+    __tablename__ = "domain_impersonation_alerts"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True)
+
+    brand_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    suspicious_domain: Mapped[str] = mapped_column(String(255), nullable=False)
+    detection_type: Mapped[str] = mapped_column(String(64), nullable=False)
+    risk_score: Mapped[float] = mapped_column(Float, nullable=False)
+
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    status: Mapped[AlertStatus] = mapped_column(Enum(AlertStatus), default=AlertStatus.open, nullable=False)
+
+
+class SandboxStatus(str, enum.Enum):
+    queued = "queued"
+    running = "running"
+    completed = "completed"
+    failed = "failed"
+
+
+class SandboxRun(Base):
+    __tablename__ = "sandbox_runs"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True)
+
+    scan_id: Mapped[Optional[int]] = mapped_column(ForeignKey("scans.id", ondelete="SET NULL"), nullable=True)
+    url: Mapped[str] = mapped_column(Text, nullable=False)
+    status: Mapped[SandboxStatus] = mapped_column(Enum(SandboxStatus), default=SandboxStatus.queued, nullable=False)
+
+    started_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    finished_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+
+    risk_score: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    summary: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    artifacts_location: Mapped[Optional[str]] = mapped_column(String(512), nullable=True)
+
+
+class SandboxEvent(Base):
+    __tablename__ = "sandbox_events"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    sandbox_run_id: Mapped[int] = mapped_column(ForeignKey("sandbox_runs.id", ondelete="CASCADE"), nullable=False, index=True)
+
+    event_type: Mapped[str] = mapped_column(String(64), nullable=False)
+    timestamp: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    data: Mapped[Dict[str, Any]] = mapped_column(JSON, default=dict)
+
+
+class SandboxArtifact(Base):
+    __tablename__ = "sandbox_artifacts"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    sandbox_run_id: Mapped[int] = mapped_column(ForeignKey("sandbox_runs.id", ondelete="CASCADE"), nullable=False, index=True)
+
+    artifact_type: Mapped[str] = mapped_column(String(64), nullable=False)
+    storage_path: Mapped[str] = mapped_column(String(512), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
 

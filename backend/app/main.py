@@ -6,13 +6,16 @@ from .schemas import PredictRequest, PredictResponse, BatchPredictRequest, Healt
 from .rate_limit import rate_limit_dependency
 from .model import ensure_model, EnsembleModel
 from .db import get_db, init_db
-from .db_models import Scan, ScanResult, ScanMetadata
+from .db_models import Scan, ScanResult, ScanMetadata, Tenant
 from .dependencies import get_current_user_optional, get_api_key_context
 from .routers_auth import router as auth_router
 from .routers_tenant import router as tenant_router
 from .routers_users import router as users_router
 from .routers_api_keys import router as api_keys_router
 from .routers_scans import router as scans_router
+from .routers_intel import router as intel_router
+from .routers_sandbox import router as sandbox_router
+from .sandbox.queue import enqueue_sandbox_run
 
 API_PORT = int(os.environ.get("API_PORT", "8000"))
 MODEL_PATH = os.environ.get("MODEL_PATH", "backend/models/model.joblib")
@@ -47,6 +50,8 @@ app.include_router(tenant_router)
 app.include_router(users_router)
 app.include_router(api_keys_router)
 app.include_router(scans_router)
+app.include_router(intel_router)
+app.include_router(sandbox_router)
 
 
 @app.get("/api/health", response_model=HealthResponse)
@@ -66,7 +71,7 @@ def _maybe_persist_scan(
     tenant_id = getattr(request.state, "tenant_id", None)
     if tenant_id is None:
         # Anonymous scans are not persisted in multi-tenant tables.
-        return
+        return None
 
     scan = Scan(
         tenant_id=tenant_id,
@@ -95,6 +100,46 @@ def _maybe_persist_scan(
     db_sess.add(scan_meta)
 
     db_sess.commit()
+    return scan.id
+
+
+def _maybe_enqueue_sandbox(
+    request: Request,
+    result: PredictResponse,
+    scan_id: int | None,
+    url: str,
+    db=Depends(get_db),
+):
+    from sqlalchemy.orm import Session
+
+    tenant_id = getattr(request.state, "tenant_id", None)
+    if tenant_id is None:
+        return
+
+    db_sess: Session = db
+    tenant = db_sess.get(Tenant, tenant_id)
+    if not tenant:
+        return
+
+    config = tenant.config or {}
+    sandbox_threshold = float(config.get("sandbox_threshold", 0.85))
+
+    if result.confidence < sandbox_threshold:
+        return
+
+    from .db_models import SandboxRun, SandboxStatus
+
+    run = SandboxRun(
+        tenant_id=tenant_id,
+        scan_id=scan_id,
+        url=url,
+        status=SandboxStatus.queued,
+    )
+
+    db_sess.add(run)
+    db_sess.commit()
+    db_sess.refresh(run)
+    enqueue_sandbox_run(run.id)
 
 
 @app.post(
@@ -110,10 +155,13 @@ async def predict(
     _api_key=Depends(get_api_key_context),
 ):
     # Pass URL, HTML, and Screenshot to the ensemble model
-    result = await model.predict(req.url, req.html, req.screenshot)
+    result = await model.predict(req.url, req.html, req.screenshot, db=db)
 
     # Persist scan if tenant context is available (multi-tenant mode)
-    _maybe_persist_scan(request=request, req=req, result=result, db=db)
+    scan_id = _maybe_persist_scan(request=request, req=req, result=result, db=db)
+
+    # Auto-enqueue sandbox analysis for high-risk detections when tenant config allows
+    _maybe_enqueue_sandbox(request=request, result=result, scan_id=scan_id, url=req.url, db=db)
     
     # Save to history
     HISTORY.insert(0, {
