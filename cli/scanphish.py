@@ -187,7 +187,7 @@ def print_security_readable(result: SecurityScanResult) -> None:
 
 def main(argv: Optional[List[str]] = None) -> int:
     parser = argparse.ArgumentParser(description="Scan a URL for phishing risk using the backend detection API.")
-    parser.add_argument("url", help="URL to scan, e.g. https://example.com")
+    parser.add_argument("url", nargs="?", default=None, help="URL to scan, e.g. https://example.com")
     parser.add_argument(
         "--api-base",
         default=DEFAULT_API_BASE,
@@ -204,6 +204,11 @@ def main(argv: Optional[List[str]] = None) -> int:
         help="Run an async Website Security Scan using Playwright instead of a prediction scan.",
     )
     parser.add_argument(
+        "--intel",
+        action="store_true",
+        help="Run local threat intel ingestion jobs (CT and NRD feeds) for testing.",
+    )
+    parser.add_argument(
         "--fail-on",
         choices=["phishing", "suspicious", "never"],
         default="phishing",
@@ -214,6 +219,29 @@ def main(argv: Optional[List[str]] = None) -> int:
     )
 
     args = parser.parse_args(argv)
+
+    if args.intel:
+        print("[*] Running Threat Intelligence Ingestion...")
+        try:
+            from backend.app.workers.ct_log_worker import main as ct_main
+            from backend.app.workers.nrd_worker import main as nrd_main
+            from backend.app.workers.passive_dns_worker import main as pdns_main
+            
+            print(" -> Running CT Log Monitor")
+            ct_main(run_forever=False)
+            print(" -> Running NRD Monitor")
+            nrd_main()
+            print(" -> Running Passive DNS checks")
+            pdns_main()
+            
+            print("[OK] Threat Intelligence ingestion complete.")
+            return 0
+        except ImportError as e:
+            print(f"[-] Could not import worker modules. Ensure you're running from the project root: {e}")
+            return 1
+
+    if not args.url:
+        parser.error("url is required for scanning commands")
 
     if args.security:
         result = run_security_scan(api_base=args.api_base, target_url=args.url, api_key=args.api_key)

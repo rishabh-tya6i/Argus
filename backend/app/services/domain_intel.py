@@ -2,8 +2,12 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime, timedelta
-from typing import Dict, List, Optional, Sequence, Tuple
+from typing import Dict, List, Optional, Sequence, Tuple, Any
 from urllib.parse import urlparse
+
+import tldextract
+import whois
+import dns.resolver
 
 from sqlalchemy.orm import Session
 
@@ -44,6 +48,51 @@ def _extract_domain_from_url(url: str) -> Optional[str]:
     parsed = urlparse(url)
     host = parsed.hostname or ""
     return host.lower() or None
+
+
+def normalize_domain(domain: str) -> str:
+    """Extract base domain and remove wildcards."""
+    domain = domain.lower()
+    if domain.startswith("*."):
+        domain = domain[2:]
+    ext = tldextract.extract(domain)
+    # Reconstruct base domain. Use f"{ext.domain}.{ext.suffix}"
+    if ext.domain and ext.suffix:
+        return f"{ext.domain}.{ext.suffix}"
+    return domain
+
+
+def get_domain_enrichment(domain: str) -> Dict[str, Any]:
+    """Fetch WHOIS and DNS intelligence for a domain."""
+    enrichment: Dict[str, Any] = {}
+    
+    # 1. IP Lookup
+    try:
+        answers = dns.resolver.resolve(domain, 'A')
+        ips = [rdata.address for rdata in answers]
+        if ips:
+            enrichment['ip_address'] = ips[0]
+            # Simple placeholder for ASN without a full ASN database
+            enrichment['asn'] = "AS_UNKNOWN" 
+    except Exception:
+        pass
+
+    # 2. WHOIS Lookup
+    try:
+        w = whois.whois(domain)
+        if w:
+            if w.creation_date:
+                creation = w.creation_date[0] if isinstance(w.creation_date, list) else w.creation_date
+                if isinstance(creation, datetime):
+                    age_days = (datetime.utcnow() - creation).days
+                    # Prevent negative age due to timezone issues
+                    enrichment['domain_age_days'] = max(0, age_days)
+            if w.registrar:
+                enrichment['registrar'] = w.registrar if isinstance(w.registrar, str) else str(w.registrar)
+    except Exception:
+        pass
+    
+    return enrichment
 
 
 def _levenshtein(a: str, b: str) -> int:

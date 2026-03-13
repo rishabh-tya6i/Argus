@@ -227,6 +227,7 @@ class DomainImpersonationAlert(Base):
     suspicious_domain: Mapped[str] = mapped_column(String(255), nullable=False)
     detection_type: Mapped[str] = mapped_column(String(64), nullable=False)
     risk_score: Mapped[float] = mapped_column(Float, nullable=False)
+    enrichment: Mapped[Optional[Dict[str, Any]]] = mapped_column(JSON, nullable=True)
 
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
     status: Mapped[AlertStatus] = mapped_column(Enum(AlertStatus), default=AlertStatus.open, nullable=False)

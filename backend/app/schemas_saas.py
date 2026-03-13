@@ -142,6 +142,7 @@ class ImpersonationAlertResponse(BaseModel):
     suspicious_domain: str
     detection_type: str
     risk_score: float
+    enrichment: Optional[Dict[str, Any]] = None
     created_at: datetime
     status: AlertStatus
 
