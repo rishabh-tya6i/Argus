@@ -44,5 +44,11 @@ def init_db() -> None:
     """
     from . import db_models  # noqa: F401 - ensure models are imported
 
+    # Attempt to create the vector extension if using PostgreSQL
+    if engine.dialect.name == "postgresql":
+        with engine.begin() as conn:
+            from sqlalchemy import text
+            conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
+
     Base.metadata.create_all(bind=engine)
 
