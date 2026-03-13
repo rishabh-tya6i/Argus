@@ -11,9 +11,10 @@ from sklearn.preprocessing import OneHotEncoder
 from sklearn.compose import ColumnTransformer
 
 from .features import extract_features
-from .schemas import PredictResponse, Explanation, ModelScores
+from .schemas import PredictResponse, Explanation, ModelScores, ExplanationReason
 from .heuristics import generate_heuristic_reasons
 from .services.domain_intel import evaluate_domain_for_url
+from .services.visual_similarity import visual_similarity_engine
 
 # --- Configuration ---
 MODEL_PATH = os.environ.get("MODEL_PATH", "backend/models/model.joblib")
@@ -149,10 +150,50 @@ class EnsembleModel:
         if domain_risk_score > 0:
             final_score = max(0.0, min(1.0, 0.85 * base_score + 0.15 * domain_risk_score))
 
+        important_features: List[str] = []
+        heuristic_reasons = generate_heuristic_reasons(url, html)
+        heuristic_reasons.extend(domain_reasons)
+
+        # Ensure Visual Similarity cache is loaded
+        if db is not None and not visual_similarity_engine.cached_brands:
+            visual_similarity_engine.load_cache(db)
+
+        # 7. Escalated Visual Brand Impersonation check
+        # Only run if base risk is > 0.4 and we have a screenshot
+        if final_score > 0.4 and screenshot:
+            
+            # Additional heuristic: Requires login form to be detected
+            features_df = extract_features(url, html)
+            has_login_form = features_df["form_count"].iloc[0] > 0 or features_df["input_count"].iloc[0] > 0
+
+            if has_login_form:
+                # Run visual similarity check against cached CLIP embeddings
+                future_impersonation = loop.run_in_executor(
+                    self.executor, visual_similarity_engine.detect_impersonation, screenshot, url
+                )
+                is_impersonation, impersonation_details = await future_impersonation
+                
+                if is_impersonation and impersonation_details:
+                    brand_name = impersonation_details["brand_name"]
+                    sim_score = impersonation_details["similarity_score"]
+                    
+                    # Boost final score significantly because this is a very strong signal
+                    final_score = min(1.0, final_score + 0.3)
+                    
+                    # Add explanation reason explicitly
+                    reason = ExplanationReason(
+                        code="BRAND_IMPERSONATION_DETECTED",
+                        category="visual_similarity",
+                        weight=0.9,
+                        message=f"Page visually resembles {brand_name} login page but is hosted on an unrelated domain. "
+                                f"(Similarity: {sim_score})"
+                    )
+                    heuristic_reasons.append(reason)
+                    important_features.append(f"Strong visual similarity to {brand_name}")
+
         prediction = "phishing" if final_score > 0.5 else "safe"
 
         # Identify important features from model scores
-        important_features: List[str] = []
         if prob_url > 0.7:
             important_features.append("Suspicious URL semantics (Transformer URL model)")
         if prob_html > 0.7:
@@ -162,12 +203,11 @@ class EnsembleModel:
         if prob_classical > 0.7:
             important_features.append("Classical URL/HTML feature patterns consistent with phishing")
 
-        # Heuristic, rule-based explanations (hidden forms, redirects, obfuscated JS, etc.)
-        heuristic_reasons = generate_heuristic_reasons(url, html)
-        heuristic_reasons.extend(domain_reasons)
         # Also surface top heuristic messages as human-readable important features
         for reason in heuristic_reasons[:3]:
-            important_features.append(reason.message)
+            # Avoid duplicating brand message if it's already there
+            if not reason.code == "BRAND_IMPERSONATION_DETECTED":
+               important_features.append(reason.message)
 
         response = PredictResponse(
             prediction=prediction,

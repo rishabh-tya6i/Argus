@@ -19,6 +19,7 @@ from sqlalchemy import (
     Float,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
+from pgvector.sqlalchemy import Vector
 
 from .db import Base
 
@@ -114,7 +115,7 @@ class Scan(Base):
     result: Mapped["ScanResult"] = relationship(
         "ScanResult", back_populates="scan", cascade="all,delete-orphan", uselist=False
     )
-    metadata: Mapped["ScanMetadata"] = relationship(
+    scan_metadata: Mapped["ScanMetadata"] = relationship(
         "ScanMetadata", back_populates="scan", cascade="all,delete-orphan", uselist=False
     )
 
@@ -149,7 +150,7 @@ class ScanMetadata(Base):
     client_type: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
     extra: Mapped[Dict[str, Any]] = mapped_column(JSON, default=dict)
 
-    scan: Mapped["Scan"] = relationship("Scan", back_populates="metadata")
+    scan: Mapped["Scan"] = relationship("Scan", back_populates="scan_metadata")
 
 
 class AuditLog(Base):
@@ -161,7 +162,7 @@ class AuditLog(Base):
 
     action: Mapped[str] = mapped_column(String(255), nullable=False)
     ip_address: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
-    metadata: Mapped[Dict[str, Any]] = mapped_column(JSON, default=dict)
+    log_metadata: Mapped[Dict[str, Any]] = mapped_column("metadata", JSON, default=dict)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False, index=True)
 
     user: Mapped[Optional["User"]] = relationship("User", back_populates="audit_logs")
@@ -336,4 +337,17 @@ class SecurityScanArtifact(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
     
     run: Mapped["SecurityScanRun"] = relationship("SecurityScanRun", back_populates="artifacts")
+
+
+class BrandTemplate(Base):
+    __tablename__ = "brand_templates"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    brand_name: Mapped[str] = mapped_column(String(128), nullable=False, unique=True, index=True)
+    legitimate_domain: Mapped[str] = mapped_column(String(255), nullable=False)
+    embedding_vector = mapped_column(Vector(512), nullable=False)
+    category: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+    login_url: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
 

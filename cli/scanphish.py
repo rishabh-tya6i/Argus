@@ -141,9 +141,19 @@ def print_human_readable(result: ScanResult) -> None:
             print(f"  - {item}")
 
     reasons: List[Dict[str, Any]] = result.explanation.get("reasons") or []
-    if reasons:
+    visual_impersonations = [r for r in reasons if r.get("code") == "BRAND_IMPERSONATION_DETECTED"]
+    other_reasons = [r for r in reasons if r.get("code") != "BRAND_IMPERSONATION_DETECTED"]
+
+    if visual_impersonations:
+        print("\n=== VISUAL BRAND IMPERSONATION WARNING ===")
+        for r in visual_impersonations:
+            msg = r.get("message", "Visual similarity detected to known brand")
+            print(f"  [ATTENTION] {msg}")
+        print("==========================================")
+
+    if other_reasons:
         print("\nHeuristic reasons:")
-        for r in reasons:
+        for r in other_reasons:
             code = r.get("code", "UNKNOWN")
             category = r.get("category", "general")
             weight = r.get("weight", 0.0)
