@@ -1,0 +1,315 @@
+# ============================================================
+# argus-api Deployment
+# ============================================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: argus-api
+  namespace: argus
+  labels:
+    app: argus-api
+    app.kubernetes.io/name: argus-api
+    app.kubernetes.io/component: api
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: argus-api
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  template:
+    metadata:
+      labels:
+        app: argus-api
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8000"
+        prometheus.io/path: "/metrics"
+    spec:
+      terminationGracePeriodSeconds: 30
+      containers:
+        - name: argus-api
+          image: argus-api:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8000
+              protocol: TCP
+          env:
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: argus-secrets
+                  key: POSTGRES_PASSWORD
+            - name: DATABASE_URL
+              value: "postgresql://argus:$(POSTGRES_PASSWORD)@postgres-service:5432/argus"
+            - name: REDIS_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: argus-config
+                  key: REDIS_URL
+            - name: OTLP_ENDPOINT
+              valueFrom:
+                configMapKeyRef:
+                  name: argus-config
+                  key: OTLP_ENDPOINT
+            - name: SANDBOX_STORAGE_ROOT
+              valueFrom:
+                configMapKeyRef:
+                  name: argus-config
+                  key: SANDBOX_STORAGE_ROOT
+            - name: MODEL_PATH
+              valueFrom:
+                configMapKeyRef:
+                  name: argus-config
+                  key: MODEL_PATH
+            - name: JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: argus-secrets
+                  key: JWT_SECRET
+            - name: API_KEY_HASH_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: argus-secrets
+                  key: API_KEY_HASH_SECRET
+          volumeMounts:
+            - name: sandbox-artifacts
+              mountPath: /data/sandbox
+          resources:
+            requests:
+              cpu: 250m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 30
+            periodSeconds: 15
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 15
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+      volumes:
+        - name: sandbox-artifacts
+          persistentVolumeClaim:
+            claimName: sandbox-artifacts-pvc
+
+---
+# ============================================================
+# argus-sandbox-worker Deployment
+# ============================================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: argus-sandbox-worker
+  namespace: argus
+  labels:
+    app: argus-sandbox-worker
+    app.kubernetes.io/component: worker
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: argus-sandbox-worker
+  template:
+    metadata:
+      labels:
+        app: argus-sandbox-worker
+    spec:
+      terminationGracePeriodSeconds: 60
+      containers:
+        - name: argus-sandbox-worker
+          image: argus-sandbox-worker:latest
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: argus-secrets
+                  key: POSTGRES_PASSWORD
+            - name: DATABASE_URL
+              value: "postgresql://argus:$(POSTGRES_PASSWORD)@postgres-service:5432/argus"
+            - name: REDIS_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: argus-config
+                  key: REDIS_URL
+            - name: SANDBOX_STORAGE_ROOT
+              valueFrom:
+                configMapKeyRef:
+                  name: argus-config
+                  key: SANDBOX_STORAGE_ROOT
+            - name: OTLP_ENDPOINT
+              valueFrom:
+                configMapKeyRef:
+                  name: argus-config
+                  key: OTLP_ENDPOINT
+          volumeMounts:
+            - name: sandbox-artifacts
+              mountPath: /data/sandbox
+            - name: dshm
+              mountPath: /dev/shm    # Shared memory for Chromium
+          resources:
+            requests:
+              cpu: 500m
+              memory: 1Gi
+            limits:
+              cpu: 1000m
+              memory: 2Gi
+          livenessProbe:
+            exec:
+              command:
+                - python
+                - -c
+                - "import redis, os; r=redis.from_url(os.getenv('REDIS_URL','redis://redis-service:6379')); r.ping()"
+            initialDelaySeconds: 30
+            periodSeconds: 30
+            timeoutSeconds: 10
+            failureThreshold: 3
+      volumes:
+        - name: sandbox-artifacts
+          persistentVolumeClaim:
+            claimName: sandbox-artifacts-pvc
+        - name: dshm
+          emptyDir:
+            medium: Memory
+            sizeLimit: 1Gi
+
+---
+# ============================================================
+# argus-threat-worker Deployment
+# ============================================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: argus-threat-worker
+  namespace: argus
+  labels:
+    app: argus-threat-worker
+    app.kubernetes.io/component: worker
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: argus-threat-worker
+  template:
+    metadata:
+      labels:
+        app: argus-threat-worker
+    spec:
+      terminationGracePeriodSeconds: 30
+      containers:
+        - name: argus-threat-worker
+          image: argus-threat-worker:latest
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: argus-secrets
+                  key: POSTGRES_PASSWORD
+            - name: DATABASE_URL
+              value: "postgresql://argus:$(POSTGRES_PASSWORD)@postgres-service:5432/argus"
+            - name: REDIS_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: argus-config
+                  key: REDIS_URL
+            - name: OTLP_ENDPOINT
+              valueFrom:
+                configMapKeyRef:
+                  name: argus-config
+                  key: OTLP_ENDPOINT
+          resources:
+            requests:
+              cpu: 200m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+          livenessProbe:
+            exec:
+              command:
+                - python
+                - -c
+                - "import redis, os; r=redis.from_url(os.getenv('REDIS_URL','redis://redis-service:6379')); r.ping()"
+            initialDelaySeconds: 20
+            periodSeconds: 30
+            timeoutSeconds: 10
+            failureThreshold: 3
+
+---
+# ============================================================
+# argus-security-worker Deployment
+# ============================================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: argus-security-worker
+  namespace: argus
+  labels:
+    app: argus-security-worker
+    app.kubernetes.io/component: worker
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: argus-security-worker
+  template:
+    metadata:
+      labels:
+        app: argus-security-worker
+    spec:
+      terminationGracePeriodSeconds: 30
+      containers:
+        - name: argus-security-worker
+          image: argus-security-worker:latest
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: argus-secrets
+                  key: POSTGRES_PASSWORD
+            - name: DATABASE_URL
+              value: "postgresql://argus:$(POSTGRES_PASSWORD)@postgres-service:5432/argus"
+            - name: REDIS_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: argus-config
+                  key: REDIS_URL
+            - name: OTLP_ENDPOINT
+              valueFrom:
+                configMapKeyRef:
+                  name: argus-config
+                  key: OTLP_ENDPOINT
+          resources:
+            requests:
+              cpu: 200m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+          livenessProbe:
+            exec:
+              command:
+                - python
+                - -c
+                - "import redis, os; r=redis.from_url(os.getenv('REDIS_URL','redis://redis-service:6379')); r.ping()"
+            initialDelaySeconds: 20
+            periodSeconds: 30
+            timeoutSeconds: 10
+            failureThreshold: 3

@@ -75,3 +75,14 @@ backend/models/*.pkl
 backend/models/*.h5
 backend/models/*.joblib
 !backend/sample_data/
+
+# Docker / Compose
+sandbox_artifacts/
+.docker/
+
+# Kubernetes secrets (never commit real secrets)
+deploy/k8s/secrets.override.yaml
+deploy/k8s/.env.k8s
+
+# Database files
+*.db

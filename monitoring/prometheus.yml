@@ -32,12 +32,33 @@ scrape_configs:
     metrics_path: "/metrics"
 
   # -----------------------------------------------------------------------
-  # Kubernetes pod discovery (optional — requires k8s RBAC)
+  # Kubernetes pod discovery (annotation-based, requires k8s RBAC)
   # -----------------------------------------------------------------------
-  # - job_name: "argus_api_k8s"
-  #   kubernetes_sd_configs:
-  #     - role: pod
-  #   relabel_configs:
-  #     - source_labels: [__meta_kubernetes_pod_label_app]
-  #       action: keep
-  #       regex: argus-api
+  - job_name: "argus_api_k8s"
+    kubernetes_sd_configs:
+      - role: pod
+        namespaces:
+          names: ["argus"]
+    relabel_configs:
+      - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_scrape]
+        action: keep
+        regex: "true"
+      - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_path]
+        action: replace
+        target_label: __metrics_path__
+        regex: (.+)
+      - source_labels: [__address__, __meta_kubernetes_pod_annotation_prometheus_io_port]
+        action: replace
+        target_label: __address__
+        regex: ([^:]+)(?::\d+)?;(\d+)
+        replacement: $1:$2
+      - source_labels: [__meta_kubernetes_pod_label_app]
+        action: replace
+        target_label: job
+      - source_labels: [__meta_kubernetes_namespace]
+        action: replace
+        target_label: namespace
+      - source_labels: [__meta_kubernetes_pod_name]
+        action: replace
+        target_label: pod
+

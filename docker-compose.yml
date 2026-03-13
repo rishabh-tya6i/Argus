@@ -1,0 +1,206 @@
+# ===========================================================
+# Argus Phishing Detection Platform – Local Development Stack
+# ===========================================================
+
+x-argus-env: &argus-env
+  DATABASE_URL: postgresql://argus:argus_dev_pass@postgres:5432/argus
+  REDIS_URL: redis://redis:6379
+  OTLP_ENDPOINT: http://jaeger:4317
+  SANDBOX_STORAGE_ROOT: /data/sandbox
+  MODEL_PATH: /app/models/model.joblib
+  SAMPLE_PATH: /app/sample_data/sample.csv
+  JWT_SECRET: dev-jwt-secret-change-in-prod
+  API_KEY_HASH_SECRET: dev-api-key-hash-secret-change-in-prod
+
+x-worker-base: &worker-base
+  build:
+    context: ./backend
+  environment:
+    <<: *argus-env
+  depends_on:
+    postgres:
+      condition: service_healthy
+    redis:
+      condition: service_healthy
+  restart: unless-stopped
+  networks:
+    - argus-net
+  volumes:
+    - sandbox_artifacts:/data/sandbox
+
+services:
+  # ─────────────────────────────────────────────
+  # FastAPI Backend API
+  # ─────────────────────────────────────────────
+  argus-api:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    image: argus-api:latest
+    container_name: argus-api
+    environment:
+      <<: *argus-env
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - sandbox_artifacts:/data/sandbox
+      - ./backend/models:/app/models:ro
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      start_period: 40s
+      retries: 3
+    restart: unless-stopped
+    networks:
+      - argus-net
+
+  # ─────────────────────────────────────────────
+  # Sandbox Worker (Playwright / Chromium)
+  # ─────────────────────────────────────────────
+  argus-sandbox-worker:
+    <<: *worker-base
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.sandbox
+    image: argus-sandbox-worker:latest
+    container_name: argus-sandbox-worker
+    # Playwright needs a shared memory space
+    shm_size: "1gb"
+    cap_add:
+      - SYS_ADMIN   # required for Chrome sandbox inside Docker
+
+  # ─────────────────────────────────────────────
+  # Threat Intelligence Worker
+  # ─────────────────────────────────────────────
+  argus-threat-worker:
+    <<: *worker-base
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.threat
+    image: argus-threat-worker:latest
+    container_name: argus-threat-worker
+
+  # ─────────────────────────────────────────────
+  # Security Scanner Worker
+  # ─────────────────────────────────────────────
+  argus-security-worker:
+    <<: *worker-base
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.security
+    image: argus-security-worker:latest
+    container_name: argus-security-worker
+
+  # ─────────────────────────────────────────────
+  # PostgreSQL 15
+  # ─────────────────────────────────────────────
+  postgres:
+    image: postgres:15-alpine
+    container_name: argus-postgres
+    environment:
+      POSTGRES_DB: argus
+      POSTGRES_USER: argus
+      POSTGRES_PASSWORD: argus_dev_pass
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U argus -d argus"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+    networks:
+      - argus-net
+    ports:
+      - "5432:5432"   # expose for local DB tools
+
+  # ─────────────────────────────────────────────
+  # Redis 7
+  # ─────────────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    container_name: argus-redis
+    command: redis-server --save 60 1 --loglevel warning
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+    networks:
+      - argus-net
+    ports:
+      - "6379:6379"   # expose for local inspection
+
+  # ─────────────────────────────────────────────
+  # Prometheus
+  # ─────────────────────────────────────────────
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: argus-prometheus
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./monitoring/alert_rules.yml:/etc/prometheus/alert_rules.yml:ro
+      - prometheus_data:/prometheus
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--web.enable-lifecycle"
+    ports:
+      - "9090:9090"
+    restart: unless-stopped
+    networks:
+      - argus-net
+
+  # ─────────────────────────────────────────────
+  # Grafana
+  # ─────────────────────────────────────────────
+  grafana:
+    image: grafana/grafana:latest
+    container_name: argus-grafana
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_PATHS_PROVISIONING: /etc/grafana/provisioning
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./monitoring/grafana_dashboard.json:/var/lib/grafana/dashboards/argus_dashboard.json:ro
+    ports:
+      - "3000:3000"
+    depends_on:
+      - prometheus
+    restart: unless-stopped
+    networks:
+      - argus-net
+
+# ─────────────────────────────────────────────
+# Volumes
+# ─────────────────────────────────────────────
+volumes:
+  postgres_data:
+  redis_data:
+  prometheus_data:
+  grafana_data:
+  # Sandbox screenshots and DOM snapshots persisted locally
+  sandbox_artifacts:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ./sandbox_artifacts   # host directory auto-created by dev_up.sh
+
+# ─────────────────────────────────────────────
+# Networks
+# ─────────────────────────────────────────────
+networks:
+  argus-net:
+    driver: bridge

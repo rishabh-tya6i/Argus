@@ -1,0 +1,43 @@
+# ============================================================
+# Argus Threat-Intel Worker – Dockerfile.threat
+# ============================================================
+FROM python:3.11-slim AS builder
+
+WORKDIR /build
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential gcc libpq-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY requirements.txt .
+RUN pip install --upgrade pip \
+    && pip install --no-cache-dir --prefix=/install -r requirements.txt
+
+# ============================================================
+FROM python:3.11-slim AS runtime
+
+LABEL maintainer="Argus Team" \
+      org.opencontainers.image.title="argus-threat-worker" \
+      org.opencontainers.image.description="Argus Threat Intelligence Worker"
+
+WORKDIR /app
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libpq5 curl \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY --from=builder /install /usr/local
+COPY . /app
+
+RUN addgroup --system argus && adduser --system --ingroup argus argus \
+    && chown -R argus:argus /app
+
+USER argus
+
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1
+
+HEALTHCHECK --interval=60s --timeout=15s --start-period=30s --retries=3 \
+    CMD python -c "import redis, os; r=redis.from_url(os.getenv('REDIS_URL','redis://redis:6379')); r.ping()" || exit 1
+
+CMD ["python", "-m", "app.workers.threat_feed_worker"]
