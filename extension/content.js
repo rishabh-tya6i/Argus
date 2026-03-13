@@ -1,8 +1,63 @@
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.action === "showWarning") {
     showPhishingWarning(request.data);
+  } else if (request.action === "extractPageData") {
+    try {
+        const data = extractSecurityData();
+        sendResponse(data);
+    } catch (err) {
+        sendResponse({ error: err.message });
+    }
   }
 });
+
+function extractSecurityData() {
+  const forms = [];
+  document.querySelectorAll('form').forEach(form => {
+    const hasPassword = !!form.querySelector('input[type="password"]');
+    
+    // Check if the form action points to a different domain
+    let isCrossDomain = false;
+    if (form.action) {
+        try {
+            const actionUrl = new URL(form.action, window.location.href);
+            isCrossDomain = actionUrl.origin !== window.location.origin;
+        } catch(e) { /* Ignore invalid URLs */ }
+    }
+
+    forms.push({
+      action: form.action,
+      method: form.method || 'GET',
+      hasPassword: hasPassword,
+      crossDomain: isCrossDomain
+    });
+  });
+
+  const scripts = [];
+  document.querySelectorAll('script').forEach(script => {
+    let isCrossDomain = false;
+    if (script.src) {
+        try {
+            const srcUrl = new URL(script.src, window.location.href);
+            isCrossDomain = srcUrl.origin !== window.location.origin;
+        } catch(e) { /* Ignore invalid URLs */ }
+    }
+
+    scripts.push({
+      src: script.src,
+      isInline: !script.src,
+      content: !script.src ? script.textContent : null,
+      crossDomain: isCrossDomain
+    });
+  });
+
+  return {
+    url: window.location.href,
+    title: document.title,
+    forms: forms,
+    scripts: scripts
+  };
+}
 
 function showPhishingWarning(data) {
   // Check if warning already exists
