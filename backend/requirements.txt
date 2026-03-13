@@ -24,3 +24,11 @@ certstream==1.12
 tldextract==5.1.2
 python-whois==0.9.4
 dnspython==2.7.0
+# Observability
+opentelemetry-sdk>=1.24.0
+opentelemetry-api>=1.24.0
+opentelemetry-exporter-otlp-proto-grpc>=1.24.0
+opentelemetry-instrumentation-fastapi>=0.45b0
+prometheus-client>=0.20.0
+prometheus-fastapi-instrumentator>=7.0.0
+python-json-logger>=2.0.7

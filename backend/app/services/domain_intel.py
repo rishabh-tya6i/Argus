@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import logging
+import traceback
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional, Sequence, Tuple, Any
@@ -13,6 +15,9 @@ from sqlalchemy.orm import Session
 
 from ..db_models import DomainReputation, ThreatFeedEntry, TenantDomainWatch
 from ..schemas import ExplanationReason
+from ..observability import tracer, get_correlation_ctx
+
+logger = logging.getLogger(__name__)
 
 
 SUSPICIOUS_TLDS = {
@@ -65,17 +70,26 @@ def normalize_domain(domain: str) -> str:
 def get_domain_enrichment(domain: str) -> Dict[str, Any]:
     """Fetch WHOIS and DNS intelligence for a domain."""
     enrichment: Dict[str, Any] = {}
-    
-    # 1. IP Lookup
+    ctx = get_correlation_ctx()
+
+    # 1. IP / DNS Lookup
     try:
         answers = dns.resolver.resolve(domain, 'A')
         ips = [rdata.address for rdata in answers]
         if ips:
             enrichment['ip_address'] = ips[0]
-            # Simple placeholder for ASN without a full ASN database
-            enrichment['asn'] = "AS_UNKNOWN" 
-    except Exception:
-        pass
+            enrichment['asn'] = "AS_UNKNOWN"
+    except Exception as exc:
+        logger.warning(
+            "DNS lookup failed",
+            extra={
+                **ctx,
+                "event": "domain_enrichment_error",
+                "step": "dns",
+                "domain": domain,
+                "error": str(exc),
+            },
+        )
 
     # 2. WHOIS Lookup
     try:
@@ -85,13 +99,22 @@ def get_domain_enrichment(domain: str) -> Dict[str, Any]:
                 creation = w.creation_date[0] if isinstance(w.creation_date, list) else w.creation_date
                 if isinstance(creation, datetime):
                     age_days = (datetime.utcnow() - creation).days
-                    # Prevent negative age due to timezone issues
                     enrichment['domain_age_days'] = max(0, age_days)
             if w.registrar:
                 enrichment['registrar'] = w.registrar if isinstance(w.registrar, str) else str(w.registrar)
-    except Exception:
-        pass
-    
+    except Exception as exc:
+        logger.warning(
+            "WHOIS lookup failed",
+            extra={
+                **ctx,
+                "event": "domain_enrichment_error",
+                "step": "whois",
+                "domain": domain,
+                "error": str(exc),
+                "traceback": traceback.format_exc(),
+            },
+        )
+
     return enrichment
 
 
@@ -291,6 +314,24 @@ def evaluate_domain_for_url(db: Session, url: str) -> Tuple[Optional[str], float
     domain = _extract_domain_from_url(url)
     if not domain:
         return None, 0.0, []
-    score, reasons = calculate_domain_risk(db, domain)
+    with tracer.start_as_current_span("domain.reputation_lookup") as span:
+        span.set_attribute("url_domain", domain)
+        try:
+            score, reasons = calculate_domain_risk(db, domain)
+            span.set_attribute("risk_score", score)
+        except Exception as exc:
+            span.record_exception(exc)
+            logger.error(
+                "Domain reputation evaluation failed",
+                extra={
+                    **get_correlation_ctx(),
+                    "event": "domain_enrichment_error",
+                    "step": "enrichment",
+                    "domain": domain,
+                    "error": str(exc),
+                    "traceback": traceback.format_exc(),
+                },
+            )
+            return domain, 0.0, []
     return domain, score, reasons
 

@@ -1,0 +1,138 @@
+groups:
+  - name: argus_worker_health
+    rules:
+      # -----------------------------------------------------------------------
+      # WorkerDown: Fires if any worker heartbeat has not been updated for 5 min
+      # -----------------------------------------------------------------------
+      - alert: WorkerDown
+        expr: |
+          (time() - worker_heartbeat) > 300
+        for: 0m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Worker {{ $labels.worker }} is down"
+          description: >
+            Worker '{{ $labels.worker }}' has not emitted a heartbeat in more
+            than 5 minutes. Last heartbeat: {{ $value | humanizeTimestamp }}.
+
+      # -----------------------------------------------------------------------
+      # WorkerHighFailureRate: >5 failures/min averaged over 5 minutes
+      # -----------------------------------------------------------------------
+      - alert: WorkerHighFailureRate
+        expr: |
+          rate(worker_failures_total[5m]) > 5
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Worker {{ $labels.worker }} has elevated failure rate"
+          description: >
+            Worker '{{ $labels.worker }}' is failing at
+            {{ $value | humanize }} errors/s over the last 5 minutes.
+
+  - name: argus_queue_health
+    rules:
+      # -----------------------------------------------------------------------
+      # SandboxQueueBacklog: sandbox queue depth exceeds 50 for 10 min
+      # -----------------------------------------------------------------------
+      - alert: SandboxQueueBacklog
+        expr: |
+          queue_depth{worker="sandbox"} > 50
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Sandbox queue backlog too high"
+          description: >
+            The sandbox worker queue has {{ $value }} pending jobs for more than
+            10 minutes. Consider adding more sandbox worker processes.
+
+      # -----------------------------------------------------------------------
+      # QueueProcessingDelay: P95 wait time > 30 seconds over 5 minutes
+      # -----------------------------------------------------------------------
+      - alert: QueueProcessingDelay
+        expr: |
+          histogram_quantile(0.95,
+            rate(queue_wait_seconds_bucket[5m])
+          ) > 30
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High queue wait time for worker {{ $labels.worker }}"
+          description: >
+            P95 queue wait time for worker '{{ $labels.worker }}' has exceeded
+            30 seconds over the last 5 minutes (current: {{ $value | humanizeDuration }}).
+
+  - name: argus_model_health
+    rules:
+      # -----------------------------------------------------------------------
+      # ModelLatencySpike: P95 model inference latency > 1 second over 5 minutes
+      # -----------------------------------------------------------------------
+      - alert: ModelLatencySpike
+        expr: |
+          histogram_quantile(0.95,
+            rate(model_inference_latency_seconds_bucket[5m])
+          ) > 1
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Model inference latency spike (detector: {{ $labels.detector }})"
+          description: >
+            P95 inference latency for detector '{{ $labels.detector }}' has
+            exceeded 1 second over the last 5 minutes
+            (current P95: {{ $value | humanizeDuration }}).
+
+  - name: argus_threat_intel
+    rules:
+      # -----------------------------------------------------------------------
+      # HighPhishingAlertSpike: Threat intel alerts > 20/min over 5 minutes
+      # -----------------------------------------------------------------------
+      - alert: HighPhishingAlertSpike
+        expr: |
+          rate(threat_intel_alerts_total[5m]) * 60 > 20
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Phishing alert spike (type: {{ $labels.detection_type }})"
+          description: >
+            Threat intelligence alerts of type '{{ $labels.detection_type }}'
+            are being generated at {{ $value | humanize }}/min for the last
+            5 minutes. This may indicate a phishing campaign or noisy feed.
+
+      # -----------------------------------------------------------------------
+      # DomainAlertStorm: phishing_detections_total > 50/min over 3 minutes
+      # -----------------------------------------------------------------------
+      - alert: DomainAlertStorm
+        expr: |
+          rate(phishing_detections_total[5m]) * 60 > 50
+        for: 3m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Domain alert storm detected"
+          description: >
+            Phishing detections are being generated at
+            {{ $value | humanize }}/min — well above normal thresholds.
+            Possible causes: a large campaign, a noisy scan, or a runaway feed.
+
+      # -----------------------------------------------------------------------
+      # ScanLatencySpike: P95 scan latency > 5 seconds over 5 minutes
+      # -----------------------------------------------------------------------
+      - alert: ScanLatencySpike
+        expr: |
+          histogram_quantile(0.95,
+            rate(scan_latency_seconds_bucket[5m])
+          ) > 5
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Scan API latency spike (plan: {{ $labels.tenant_plan }})"
+          description: >
+            P95 scan latency for plan '{{ $labels.tenant_plan }}' has exceeded
+            5 seconds over the last 5 minutes
+            (current: {{ $value | humanizeDuration }}).
