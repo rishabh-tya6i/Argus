@@ -7,12 +7,14 @@
     "activeTab",
     "tabs",
     "storage",
-    "scripting"
+    "scripting",
+    "webRequest"
   ],
   "host_permissions": [
     "http://localhost:8000/*",
     "<all_urls>"
   ],
+  "devtools_page": "devtools.html",
   "background": {
     "service_worker": "background.js"
   },

@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Security Inspector</title>
+    <link rel="stylesheet" href="panel.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="app-container">
+        <!-- Sidebar Navigation -->
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <h2>Argus Engine</h2>
+                <div class="subtitle">Security Inspector</div>
+            </div>
+            <nav class="sidebar-nav">
+                <button class="nav-btn active" data-target="overview">
+                    <span class="icon">📊</span> Overview
+                </button>
+                <button class="nav-btn" data-target="forms">
+                    <span class="icon">📝</span> Forms <span class="badge" id="badge-forms">0</span>
+                </button>
+                <button class="nav-btn" data-target="scripts">
+                    <span class="icon">📜</span> Scripts <span class="badge" id="badge-scripts">0</span>
+                </button>
+                <button class="nav-btn" data-target="network">
+                    <span class="icon">🌐</span> Network <span class="badge" id="badge-network">0</span>
+                </button>
+                <button class="nav-btn" data-target="headers">
+                    <span class="icon">🛡️</span> Headers
+                </button>
+                <button class="nav-btn" data-target="signals">
+                    <span class="icon">🚨</span> Signals
+                </button>
+            </nav>
+            <div class="sidebar-footer">
+                <button id="scan-btn" class="primary-btn pulse-anim">
+                    <span class="icon">🔍</span> Scan Page
+                </button>
+            </div>
+        </aside>
+
+        <!-- Main Content Area -->
+        <main class="content-area">
+            <!-- Header -->
+            <header class="top-bar">
+                <div class="status-indicator">
+                    <div class="status-dot" id="global-status-dot"></div>
+                    <span id="global-status-text">Ready to scan...</span>
+                </div>
+                <div class="url-display" id="current-url" title="Current URL">-</div>
+            </header>
+
+            <!-- Views -->
+            <div class="view-container">
+                <!-- Overview View -->
+                <section id="view-overview" class="view active">
+                    <div class="dashboard-grid">
+                        <div class="metric-card">
+                            <h3 class="metric-title">Risk Assessment</h3>
+                            <div class="metric-value" id="overview-risk-score">--</div>
+                        </div>
+                        <div class="metric-card">
+                            <h3 class="metric-title">Vulnerabilities</h3>
+                            <div class="metric-value text-danger" id="overview-vulns">0</div>
+                        </div>
+                        <div class="metric-card">
+                            <h3 class="metric-title">Domain Reputation</h3>
+                            <div class="metric-value indicator-value" id="overview-reputation">
+                                <span class="status-indicator-inline"></span>--
+                            </div>
+                        </div>
+                    </div>
+                    <div class="summary-section card">
+                        <h3>Analysis Summary</h3>
+                        <p id="overview-summary-text" class="text-muted">Click "Scan Page" to analyze the current webpage for security risks.</p>
+                    </div>
+                </section>
+
+                <!-- Forms View -->
+                <section id="view-forms" class="view">
+                    <div class="section-header">
+                        <h3>Form Security Analysis</h3>
+                        <p class="text-muted">Detects credential exfiltration and unauthorized cross-domain submissions.</p>
+                    </div>
+                    <div class="data-list" id="forms-list">
+                        <div class="empty-state">No data. Scan page to populate.</div>
+                    </div>
+                </section>
+
+                <!-- Scripts View -->
+                <section id="view-scripts" class="view">
+                    <div class="section-header">
+                        <h3>Script Risk Detection</h3>
+                        <p class="text-muted">Analyzes scripts for dangerous functions (eval, atob), obfuscation, and suspicious domains.</p>
+                    </div>
+                    <div class="data-list" id="scripts-list">
+                         <div class="empty-state">No data. Scan page to populate.</div>
+                    </div>
+                </section>
+
+                <!-- Network View -->
+                <section id="view-network" class="view">
+                    <div class="section-header">
+                        <h3>Network Activity</h3>
+                        <p class="text-muted">Monitors outgoing requests and suspicious domains.</p>
+                    </div>
+                    <div class="data-list" id="network-list">
+                         <div class="empty-state">No data. Scan page to populate.</div>
+                    </div>
+                </section>
+
+                <!-- Headers View -->
+                <section id="view-headers" class="view">
+                    <div class="section-header">
+                        <h3>Security Headers</h3>
+                        <p class="text-muted">Validates implementation of CSP, HSTS, X-Frame-Options, and Referrer-Policy.</p>
+                    </div>
+                    <div class="header-grid" id="headers-grid">
+                         <div class="empty-state">No data. Scan page to populate.</div>
+                    </div>
+                </section>
+
+                <!-- Signals View -->
+                <section id="view-signals" class="view">
+                    <div class="section-header">
+                        <h3>Detection Engine Signals</h3>
+                        <p class="text-muted">AI and Threat Intel insights from Argus Backend API.</p>
+                    </div>
+                    <div class="signals-container card" id="signals-container">
+                        <div class="empty-state">No signals generated yet.</div>
+                    </div>
+                </section>
+            </div>
+        </main>
+    </div>
+    <script src="panel.js"></script>
+</body>
+</html>

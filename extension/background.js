@@ -60,3 +60,94 @@ async function analyzeTab(tabId, url) {
     console.error("Analysis failed:", error);
   }
 }
+
+// --- DevTools Panel Support ---
+
+// Tab Data Cache for Network and Headers
+const tabData = {};
+
+function initTabData(tabId) {
+  if (!tabData[tabId]) {
+    tabData[tabId] = {
+      requests: [],
+      headers: {}
+    };
+  }
+}
+
+// Ensure cleanup when tabs are closed
+chrome.tabs.onRemoved.addListener((tabId) => {
+  if (tabData[tabId]) {
+    delete tabData[tabId];
+  }
+});
+
+// Clear data on navigation
+chrome.webNavigation?.onBeforeNavigate?.addListener((details) => {
+    if (details.frameId === 0 && tabData[details.tabId]) {
+        tabData[details.tabId] = { requests: [], headers: {} };
+    }
+});
+
+// Capture network requests
+chrome.webRequest.onCompleted.addListener(
+  (details) => {
+    if (details.tabId >= 0) {
+      initTabData(details.tabId);
+      // store relevant request info
+      tabData[details.tabId].requests.push({
+        url: details.url,
+        method: details.method,
+        type: details.type,
+        ip: details.ip
+      });
+    }
+  },
+  { urls: ["<all_urls>"] }
+);
+
+// Capture security headers
+chrome.webRequest.onHeadersReceived.addListener(
+  (details) => {
+    if (details.tabId >= 0 && details.type === "main_frame") {
+      initTabData(details.tabId);
+      const headers = {};
+      
+      const relevantHeaders = [
+        "content-security-policy",
+        "strict-transport-security",
+        "x-frame-options",
+        "referrer-policy"
+      ];
+
+      for (const header of details.responseHeaders) {
+        const name = header.name.toLowerCase();
+        if (relevantHeaders.includes(name)) {
+          headers[name] = header.value;
+        }
+      }
+      tabData[details.tabId].headers = headers;
+    }
+  },
+  { urls: ["<all_urls>"] },
+  ["responseHeaders"]
+);
+
+// Message relay between DevTools and Content Script
+chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+  if (request.action === "getNetworkData") {
+    sendResponse(tabData[request.tabId] || { requests: [], headers: {} });
+    return true;
+  }
+  
+  if (request.action === "triggerScan") {
+    chrome.tabs.sendMessage(request.tabId, { action: "extractPageData" }, (response) => {
+        if (chrome.runtime.lastError) {
+             sendResponse({ error: chrome.runtime.lastError.message });
+        } else {
+             sendResponse(response);
+        }
+    });
+    return true; // Keep message channel open for async response
+  }
+});
