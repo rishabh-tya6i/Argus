@@ -1,0 +1,6 @@
+url,label,html
+http://example.com,legitimate,
+https://secure-login.example.com/login,legitimate,<html><body><form><input type="text"/></form></body></html>
+http://198.51.100.12/verify,phishing,<html><body>update account</body></html>
+http://free-gift.example.co/claim,phishing,<html><body><form><input/></form><input/></body></html>
+https://paypal.example.net.security-update.info,phishing,

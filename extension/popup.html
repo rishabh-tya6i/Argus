@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <style>
+    body {
+      width: 300px;
+      padding: 20px;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      text-align: center;
+    }
+    h2 {
+      margin-top: 0;
+      color: #333;
+    }
+    .status {
+      font-size: 18px;
+      font-weight: bold;
+      margin: 20px 0;
+      padding: 10px;
+      border-radius: 8px;
+    }
+    .safe {
+      background-color: #d4edda;
+      color: #155724;
+    }
+    .phishing {
+      background-color: #f8d7da;
+      color: #721c24;
+    }
+    .loading {
+      color: #666;
+    }
+    button {
+      background-color: #007bff;
+      color: white;
+      border: none;
+      padding: 10px 20px;
+      border-radius: 5px;
+      cursor: pointer;
+      width: 100%;
+      margin-top: 10px;
+    }
+    button:hover {
+      background-color: #0056b3;
+    }
+  </style>
+</head>
+<body>
+  <h2>Phishing Detector</h2>
+  <div id="status" class="status loading">Checking...</div>
+  <div id="details"></div>
+  <button id="report-btn">Report Incorrect</button>
+  <script src="popup.js"></script>
+</body>
+</html>

@@ -1,0 +1,167 @@
+from __future__ import annotations
+
+import enum
+import secrets
+from datetime import datetime
+from typing import Any, Dict, Optional
+
+from sqlalchemy import (
+    Boolean,
+    CheckConstraint,
+    Column,
+    DateTime,
+    Enum,
+    ForeignKey,
+    Integer,
+    JSON,
+    String,
+    Text,
+)
+from sqlalchemy.orm import Mapped, mapped_column, relationship
+
+from .db import Base
+
+
+class TenantStatus(str, enum.Enum):
+    active = "active"
+    suspended = "suspended"
+
+
+class UserRole(str, enum.Enum):
+    viewer = "viewer"
+    analyst = "analyst"
+    engineer = "engineer"
+    admin = "admin"
+
+
+class Tenant(Base):
+    __tablename__ = "tenants"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    slug: Mapped[str] = mapped_column(String(255), unique=True, nullable=False, index=True)
+    status: Mapped[TenantStatus] = mapped_column(Enum(TenantStatus), default=TenantStatus.active, nullable=False)
+    plan_tier: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+    config: Mapped[Dict[str, Any]] = mapped_column(JSON, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime,
+        default=datetime.utcnow,
+        onupdate=datetime.utcnow,
+        nullable=False,
+    )
+
+    users: Mapped[list["User"]] = relationship("User", back_populates="tenant", cascade="all,delete-orphan")
+    api_keys: Mapped[list["APIKey"]] = relationship("APIKey", back_populates="tenant", cascade="all,delete-orphan")
+    scans: Mapped[list["Scan"]] = relationship("Scan", back_populates="tenant", cascade="all,delete-orphan")
+
+
+class User(Base):
+    __tablename__ = "users"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True)
+
+    email: Mapped[str] = mapped_column(String(255), unique=True, nullable=False, index=True)
+    password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
+    role: Mapped[UserRole] = mapped_column(Enum(UserRole), default=UserRole.viewer, nullable=False)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    last_login_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+
+    tenant: Mapped["Tenant"] = relationship("Tenant", back_populates="users")
+    scans: Mapped[list["Scan"]] = relationship("Scan", back_populates="created_by_user")
+    audit_logs: Mapped[list["AuditLog"]] = relationship("AuditLog", back_populates="user")
+
+
+class APIKey(Base):
+    __tablename__ = "api_keys"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True)
+
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    key_prefix: Mapped[str] = mapped_column(String(16), nullable=False, index=True)
+    key_hash: Mapped[str] = mapped_column(String(255), nullable=False)
+    scopes: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    last_used_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+
+    tenant: Mapped["Tenant"] = relationship("Tenant", back_populates="api_keys")
+
+    @staticmethod
+    def generate_raw_key() -> str:
+        return secrets.token_urlsafe(32)
+
+
+class Scan(Base):
+    __tablename__ = "scans"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True)
+    url: Mapped[str] = mapped_column(Text, nullable=False)
+    source: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False, index=True)
+
+    created_by_user_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True, index=True)
+
+    tenant: Mapped["Tenant"] = relationship("Tenant", back_populates="scans")
+    created_by_user: Mapped[Optional["User"]] = relationship("User", back_populates="scans")
+    result: Mapped["ScanResult"] = relationship(
+        "ScanResult", back_populates="scan", cascade="all,delete-orphan", uselist=False
+    )
+    metadata: Mapped["ScanMetadata"] = relationship(
+        "ScanMetadata", back_populates="scan", cascade="all,delete-orphan", uselist=False
+    )
+
+
+class ScanResult(Base):
+    __tablename__ = "scan_results"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    scan_id: Mapped[int] = mapped_column(ForeignKey("scans.id", ondelete="CASCADE"), nullable=False, unique=True)
+
+    prediction: Mapped[str] = mapped_column(String(32), nullable=False)
+    confidence: Mapped[float] = mapped_column(Integer, nullable=False)
+    explanation: Mapped[Dict[str, Any]] = mapped_column(JSON, nullable=False)
+
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+
+    scan: Mapped["Scan"] = relationship("Scan", back_populates="result")
+
+    __table_args__ = (
+        CheckConstraint("confidence >= 0 AND confidence <= 1", name="ck_scan_results_confidence_range"),
+    )
+
+
+class ScanMetadata(Base):
+    __tablename__ = "scan_metadata"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    scan_id: Mapped[int] = mapped_column(ForeignKey("scans.id", ondelete="CASCADE"), nullable=False, unique=True)
+
+    ip_address: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+    user_agent: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    client_type: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+    extra: Mapped[Dict[str, Any]] = mapped_column(JSON, default=dict)
+
+    scan: Mapped["Scan"] = relationship("Scan", back_populates="metadata")
+
+
+class AuditLog(Base):
+    __tablename__ = "audit_logs"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True)
+    user_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+
+    action: Mapped[str] = mapped_column(String(255), nullable=False)
+    ip_address: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+    metadata: Mapped[Dict[str, Any]] = mapped_column(JSON, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False, index=True)
+
+    user: Mapped[Optional["User"]] = relationship("User", back_populates="audit_logs")
+
