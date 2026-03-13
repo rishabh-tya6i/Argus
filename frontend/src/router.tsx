@@ -9,6 +9,7 @@ import { ScanDetailsPage } from './pages/Scans/ScanDetailsPage';
 import { SandboxPage } from './pages/Sandbox/SandboxPage';
 import { ThreatIntelPage } from './pages/ThreatIntel/ThreatIntelPage';
 import { TenantAdminPage } from './pages/Admin/TenantAdminPage';
+import { SecurityScannerPage } from './pages/SecurityScanner/SecurityScannerPage';
 
 export const MainRouter = () => {
   const { isAuthenticated } = useAuth();
@@ -23,6 +24,7 @@ export const MainRouter = () => {
         <Route path="/scans/:id" element={<ScanDetailsPage />} />
         <Route path="/sandbox" element={<SandboxPage />} />
         <Route path="/sandbox/:id" element={<SandboxPage />} />
+        <Route path="/security-scanner" element={<SecurityScannerPage />} />
         <Route path="/intel" element={<ThreatIntelPage />} />
         <Route path="/admin" element={<TenantAdminPage />} />
       </Route>
