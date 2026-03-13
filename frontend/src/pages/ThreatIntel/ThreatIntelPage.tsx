@@ -55,16 +55,32 @@ export const ThreatIntelPage = () => {
                   <tr>
                     <th>Target Brand</th>
                     <th>Suspicious Domain</th>
+                    <th>Intelligence</th>
+                    <th>Risk</th>
                     <th>Type</th>
                     <th>Action</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {alerts.map(a => (
+                  {alerts.map((a: any) => (
                     <tr key={a.id}>
-                      <td className="font-semibold">{a.brand}</td>
+                      <td className="font-semibold">{a.brand_name}</td>
                       <td className="font-mono text-xs">{a.suspicious_domain}</td>
-                      <td><span className="badge badge-error badge-sm">{a.alert_type}</span></td>
+                      <td className="text-xs text-base-content/70">
+                        {a.enrichment ? (
+                          <div className="flex flex-col gap-0.5">
+                            {a.enrichment.ip_address && <span>IP: {a.enrichment.ip_address}</span>}
+                            {a.enrichment.registrar && <span>Registrar: {a.enrichment.registrar}</span>}
+                            {a.enrichment.domain_age_days !== undefined && <span>Age: {a.enrichment.domain_age_days}d</span>}
+                          </div>
+                        ) : 'Pending'}
+                      </td>
+                      <td>
+                        <span className={`badge ${a.risk_score >= 0.7 ? 'badge-error' : 'badge-warning'} font-mono`}>
+                          {Math.round(a.risk_score * 100)}%
+                        </span>
+                      </td>
+                      <td><span className="badge badge-outline badge-sm">{a.detection_type}</span></td>
                       <td><button className="btn btn-xs btn-outline">Triage</button></td>
                     </tr>
                   ))}

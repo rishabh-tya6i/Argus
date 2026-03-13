@@ -20,3 +20,7 @@ PyJWT==2.8.0
 passlib[bcrypt]==1.7.4
 redis==5.0.3
 playwright==1.47.0
+certstream==1.12
+tldextract==5.1.2
+python-whois==0.9.4
+dnspython==2.7.0

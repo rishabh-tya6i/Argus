@@ -51,8 +51,15 @@ export interface SandboxRun {
 export interface ThreatAlert {
   id: number;
   tenant_id: number;
-  brand: string;
+  brand_name: string;
   suspicious_domain: string;
-  alert_type: string;
+  detection_type: string;
   status: string;
+  risk_score: number;
+  enrichment?: {
+    ip_address?: string;
+    asn?: string;
+    registrar?: string;
+    domain_age_days?: number;
+  };
 }
