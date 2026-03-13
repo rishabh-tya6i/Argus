@@ -1,0 +1,102 @@
+# ============================================================
+# argus-api ClusterIP Service (internal + Prometheus scrape)
+# ============================================================
+apiVersion: v1
+kind: Service
+metadata:
+  name: argus-api-service
+  namespace: argus
+  labels:
+    app: argus-api
+    app.kubernetes.io/component: api
+  annotations:
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "8000"
+    prometheus.io/path: "/metrics"
+spec:
+  type: ClusterIP
+  selector:
+    app: argus-api
+  ports:
+    - name: http
+      protocol: TCP
+      port: 80
+      targetPort: 8000
+
+---
+# ============================================================
+# PostgreSQL Service
+# ============================================================
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres-service
+  namespace: argus
+  labels:
+    app: postgres
+spec:
+  type: ClusterIP
+  selector:
+    app: postgres
+  ports:
+    - port: 5432
+      targetPort: 5432
+
+---
+# ============================================================
+# Redis Service
+# ============================================================
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis-service
+  namespace: argus
+  labels:
+    app: redis
+spec:
+  type: ClusterIP
+  selector:
+    app: redis
+  ports:
+    - port: 6379
+      targetPort: 6379
+
+---
+# ============================================================
+# Prometheus Service (internal)
+# ============================================================
+apiVersion: v1
+kind: Service
+metadata:
+  name: prometheus-service
+  namespace: argus
+  labels:
+    app: prometheus
+spec:
+  type: ClusterIP
+  selector:
+    app: prometheus
+  ports:
+    - name: web
+      port: 9090
+      targetPort: 9090
+
+---
+# ============================================================
+# Grafana Service (LoadBalancer for external access)
+# ============================================================
+apiVersion: v1
+kind: Service
+metadata:
+  name: grafana-service
+  namespace: argus
+  labels:
+    app: grafana
+spec:
+  type: LoadBalancer
+  selector:
+    app: grafana
+  ports:
+    - name: web
+      port: 3000
+      targetPort: 3000

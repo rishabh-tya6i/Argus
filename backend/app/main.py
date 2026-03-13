@@ -102,8 +102,51 @@ app.include_router(sandbox_router)
 app.include_router(security_scans_router)
 
 
-@app.get("/api/health", response_model=HealthResponse)
+@app.get("/health", tags=["ops"])
+async def health_probe(db=Depends(get_db)):
+    """
+    Liveness & readiness probe endpoint consumed by Kubernetes and Docker
+    health checks.  Returns 200 when the service is healthy, 503 otherwise.
+    """
+    import time
+    checks: dict = {}
+    healthy = True
+
+    # --- Database ping ---
+    try:
+        from sqlalchemy import text
+        db.execute(text("SELECT 1"))
+        checks["database"] = "ok"
+    except Exception as exc:
+        checks["database"] = f"error: {exc}"
+        healthy = False
+
+    # --- Redis ping ---
+    try:
+        import redis as redis_lib
+        r = redis_lib.from_url(os.environ.get("REDIS_URL", "redis://localhost:6379"), socket_timeout=2)
+        r.ping()
+        checks["redis"] = "ok"
+    except Exception as exc:
+        checks["redis"] = f"error: {exc}"
+        healthy = False
+
+    body = {
+        "status": "ok" if healthy else "degraded",
+        "checks": checks,
+        "timestamp": time.time(),
+    }
+
+    if not healthy:
+        from fastapi.responses import JSONResponse
+        return JSONResponse(status_code=503, content=body)
+
+    return body
+
+
+@app.get("/api/health", response_model=HealthResponse, tags=["ops"])
 async def health():
+    """Legacy health endpoint kept for backward compatibility."""
     return {"status": "ok"}
 
 

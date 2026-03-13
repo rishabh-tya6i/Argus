@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: argus-config
+  namespace: argus
+  labels:
+    app.kubernetes.io/name: argus
+data:
+  DATABASE_URL: "postgresql://argus:$(POSTGRES_PASSWORD)@postgres-service:5432/argus"
+  REDIS_URL: "redis://redis-service:6379"
+  OTLP_ENDPOINT: "http://jaeger-collector:4317"
+  SANDBOX_STORAGE_ROOT: "/data/sandbox"
+  MODEL_PATH: "/app/models/model.joblib"
+  SAMPLE_PATH: "/app/sample_data/sample.csv"

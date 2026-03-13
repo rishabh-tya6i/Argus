@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: argus
+  labels:
+    app.kubernetes.io/name: argus
+    app.kubernetes.io/managed-by: kubectl
