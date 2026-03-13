@@ -1,9 +1,18 @@
 import os
-from fastapi import FastAPI, Depends
+from fastapi import FastAPI, Depends, Request
 from fastapi.middleware.cors import CORSMiddleware
+
 from .schemas import PredictRequest, PredictResponse, BatchPredictRequest, HealthResponse, MetricsResponse
 from .rate_limit import rate_limit_dependency
 from .model import ensure_model, EnsembleModel
+from .db import get_db, init_db
+from .db_models import Scan, ScanResult, ScanMetadata
+from .dependencies import get_current_user_optional, get_api_key_context
+from .routers_auth import router as auth_router
+from .routers_tenant import router as tenant_router
+from .routers_users import router as users_router
+from .routers_api_keys import router as api_keys_router
+from .routers_scans import router as scans_router
 
 API_PORT = int(os.environ.get("API_PORT", "8000"))
 MODEL_PATH = os.environ.get("MODEL_PATH", "backend/models/model.joblib")
@@ -23,8 +32,21 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+@app.on_event("startup")
+def _startup():
+    # Initialize DB schema (for dev/local; production should rely on Alembic migrations).
+    init_db()
+
+
 # Initialize Model
 model: EnsembleModel = ensure_model(MODEL_PATH, SAMPLE_PATH)
+
+# SaaS / multi-tenant routers
+app.include_router(auth_router)
+app.include_router(tenant_router)
+app.include_router(users_router)
+app.include_router(api_keys_router)
+app.include_router(scans_router)
 
 
 @app.get("/api/health", response_model=HealthResponse)
@@ -32,10 +54,66 @@ async def health():
     return {"status": "ok"}
 
 
-@app.post("/api/predict", response_model=PredictResponse, dependencies=[Depends(rate_limit_dependency)])
-async def predict(req: PredictRequest):
+def _maybe_persist_scan(
+    request: Request,
+    req: PredictRequest,
+    result: PredictResponse,
+    db=Depends(get_db),
+):
+    from sqlalchemy.orm import Session
+
+    db_sess: Session = db
+    tenant_id = getattr(request.state, "tenant_id", None)
+    if tenant_id is None:
+        # Anonymous scans are not persisted in multi-tenant tables.
+        return
+
+    scan = Scan(
+        tenant_id=tenant_id,
+        url=req.url,
+        source=req.source,
+        created_by_user_id=getattr(getattr(request.state, "user", None), "id", None),
+    )
+    db_sess.add(scan)
+    db_sess.flush()
+
+    scan_result = ScanResult(
+        scan_id=scan.id,
+        prediction=result.prediction,
+        confidence=result.confidence,
+        explanation=result.explanation.model_dump(),
+    )
+    db_sess.add(scan_result)
+
+    scan_meta = ScanMetadata(
+        scan_id=scan.id,
+        ip_address=request.client.host if request.client else None,
+        user_agent=request.headers.get("user-agent"),
+        client_type=request.headers.get("x-client-type"),
+        extra={},
+    )
+    db_sess.add(scan_meta)
+
+    db_sess.commit()
+
+
+@app.post(
+    "/api/predict",
+    response_model=PredictResponse,
+    dependencies=[Depends(rate_limit_dependency)],
+)
+async def predict(
+    req: PredictRequest,
+    request: Request,
+    db=Depends(get_db),
+    _user=Depends(get_current_user_optional),
+    _api_key=Depends(get_api_key_context),
+):
     # Pass URL, HTML, and Screenshot to the ensemble model
     result = await model.predict(req.url, req.html, req.screenshot)
+
+    # Persist scan if tenant context is available (multi-tenant mode)
+    _maybe_persist_scan(request=request, req=req, result=result, db=db)
     
     # Save to history
     HISTORY.insert(0, {

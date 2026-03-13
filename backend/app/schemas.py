@@ -6,6 +6,7 @@ class PredictRequest(BaseModel):
     url: str
     html: Optional[str] = None
     screenshot: Optional[str] = None  # Base64 encoded image string
+    source: Optional[str] = None  # extension/cli/sdk/dashboard/other
 
 
 class ModelScores(BaseModel):
