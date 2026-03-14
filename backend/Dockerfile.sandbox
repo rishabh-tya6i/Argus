@@ -1,5 +1,5 @@
 # ============================================================
-# Stage 1 – dependency builder
+# Stage 1 – dependency builder (uses standard slim for caching)
 # ============================================================
 FROM python:3.11-slim AS builder
 
@@ -14,9 +14,11 @@ RUN pip install --upgrade pip \
     && pip install --no-cache-dir --prefix=/install -r requirements.txt
 
 # ============================================================
-# Stage 2 – runtime image with Playwright / Chromium
+# Stage 2 – runtime image
+# Uses Microsoft's official Playwright image which ships with
+# Chromium pre-installed and validated across Debian versions.
 # ============================================================
-FROM python:3.11-slim AS runtime
+FROM mcr.microsoft.com/playwright/python:v1.47.0-jammy AS runtime
 
 LABEL maintainer="Argus Team" \
       org.opencontainers.image.title="argus-sandbox-worker" \
@@ -24,21 +26,12 @@ LABEL maintainer="Argus Team" \
 
 WORKDIR /app
 
-# Playwright OS-level dependencies (Chromium)
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    libpq5 curl wget gnupg ca-certificates \
-    libnss3 libatk1.0-0 libatk-bridge2.0-0 libcups2 libxkbcommon0 \
-    libxcomposite1 libxdamage1 libxrandr2 libgbm1 libasound2 \
-    libpango-1.0-0 libpangocairo-1.0-0 libxss1 libgconf-2-4 \
-    fonts-liberation libappindicator3-1 xdg-utils \
+    libpq5 \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy Python packages from builder
 COPY --from=builder /install /usr/local
-
-# Install Playwright browsers as root before switching user
-RUN playwright install chromium --with-deps 2>/dev/null || \
-    python -m playwright install chromium
 
 # Copy application source
 COPY . /app
@@ -52,11 +45,10 @@ USER argus
 
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
-    SANDBOX_STORAGE_ROOT=/data/sandbox \
-    # Required by Playwright in headless Docker environments
-    PLAYWRIGHT_BROWSERS_PATH=/root/.cache/ms-playwright
+    SANDBOX_STORAGE_ROOT=/data/sandbox
 
 HEALTHCHECK --interval=60s --timeout=15s --start-period=60s --retries=3 \
     CMD python -c "import redis, os; r=redis.from_url(os.getenv('REDIS_URL','redis://redis:6379')); r.ping()" || exit 1
 
 CMD ["python", "-m", "app.workers.sandbox_worker"]
+
