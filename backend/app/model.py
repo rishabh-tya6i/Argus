@@ -15,6 +15,7 @@ from sklearn.compose import ColumnTransformer
 
 from .features import extract_features
 from .schemas import PredictResponse, Explanation, ModelScores, ExplanationReason
+from .ml.loader import get_active_model
 from .heuristics import generate_heuristic_reasons
 from .services.domain_intel import evaluate_domain_for_url
 from .services.visual_similarity import visual_similarity_engine
@@ -140,6 +141,7 @@ class EnsembleModel:
         screenshot: Optional[str],
         db: Optional["Session"] = None,  # type: ignore[name-defined]
     ) -> PredictResponse:
+        import hashlib
         # Check cache (URL only for simplicity)
         if url in self.cache:
             return self.cache[url]
@@ -252,6 +254,25 @@ class EnsembleModel:
             if prob_classical > 0.7:
                 important_features.append("Classical URL/HTML feature patterns consistent with phishing")
 
+            # --- Shadow Mode / Drift Monitoring Logic ---
+            shadow_model = get_active_model("shadow_ensemble")
+            if shadow_model:
+                try:
+                    features_df = extract_features(url, html)
+                    shadow_prob = float(shadow_model.predict_proba(features_df)[0][1])
+                    logger.info(
+                        "Shadow prediction recorded",
+                        extra={
+                            **get_correlation_ctx(),
+                            "event": "shadow_model_prediction",
+                            "shadow_prob": round(shadow_prob, 4),
+                            "main_prob": round(final_score, 4),
+                            "mismatch": abs(shadow_prob - final_score) > 0.3
+                        }
+                    )
+                except Exception as exc:
+                    logger.debug(f"Shadow model failed: {exc}")
+
             for reason in heuristic_reasons[:3]:
                 if not reason.code == "BRAND_IMPERSONATION_DETECTED":
                     important_features.append(reason.message)
@@ -279,9 +300,38 @@ class EnsembleModel:
         return response
 
     def _predict_classical(self, url: str, html: Optional[str]) -> float:
+        """
+        Uses the classically trained ML model (URL + HTML features).
+        Loads the active model version from the database registry if available.
+        """
         features_df = extract_features(url, html)
+        
+        # 1. A/B Testing Logic (e.g., 20% traffic to AB model)
+        ab_model = get_active_model("ab_ensemble")
+        if ab_model:
+            try:
+                import hashlib
+                h = int(hashlib.md5(url.encode()).hexdigest(), 16)
+                if (h % 100) < 20:
+                    return float(ab_model.predict_proba(features_df)[0][1])
+            except Exception as exc:
+                logger.error(f"AB model inference failed: {exc}")
+
+        # 2. Try to get dynamically loaded model from registry
+        reg_model = get_active_model("ensemble")
+        if reg_model:
+            try:
+                return float(reg_model.predict_proba(features_df)[0][1])
+            except Exception as exc:
+                logger.error(f"Registry model inference failed: {exc}")
+        
+        # 2. Fallback to hardcoded classical pipeline if registry model fails or is missing
         if self.classical_pipeline:
-            return float(self.classical_pipeline.predict_proba(features_df)[0][1])
+            try:
+                return float(self.classical_pipeline.predict_proba(features_df)[0][1])
+            except Exception as exc:
+                logger.error(f"Fallback classical model inference failed: {exc}")
+                
         return 0.5
 
 

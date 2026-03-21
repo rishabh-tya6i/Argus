@@ -23,6 +23,8 @@ from .routers_security_scans import router as security_scans_router
 from .routers_alerts import router as alerts_router
 from .routers_cases import router as cases_router
 from .routers_notification_channels import router as notification_channels_router
+from .routers_feedback import router as feedback_router
+from .routers_models import router as models_router
 from .sandbox.queue import enqueue_sandbox_run
 from .observability import (
     setup_tracing,
@@ -106,6 +108,8 @@ app.include_router(security_scans_router)
 app.include_router(alerts_router)
 app.include_router(cases_router)
 app.include_router(notification_channels_router)
+app.include_router(feedback_router)
+app.include_router(models_router)
 
 
 @app.get("/health", tags=["ops"])
@@ -211,6 +215,19 @@ def _maybe_persist_scan(
         extra={},
     )
     db_sess.add(scan_meta)
+    
+    # Extract and save features for ML training
+    from .features import extract_features
+    from .db_models import ScanFeatures
+    try:
+        feat_df = extract_features(req.url, req.html)
+        scan_features = ScanFeatures(
+            scan_id=scan.id,
+            features_json=feat_df.iloc[0].to_dict()
+        )
+        db_sess.add(scan_features)
+    except Exception as exc:
+        logger.error(f"Failed to extract/save features: {exc}")
 
     db_sess.commit()
     return scan.id
@@ -398,20 +415,6 @@ async def batch_predict(req: BatchPredictRequest):
             "confidence": res.confidence
         })
     return {"results": results}
-
-
-@app.post("/api/feedback")
-async def feedback(url: str, label: str):
-    # Log user feedback for future retraining
-    if label == "safe":
-        # User is overriding a phishing prediction — count as false positive
-        try:
-            from .observability import FALSE_POSITIVE_OVERRIDES_TOTAL
-            FALSE_POSITIVE_OVERRIDES_TOTAL.labels(tenant_plan="unknown").inc()
-        except Exception:
-            pass
-    logger.info("Feedback received", extra={"event": "feedback", "url": url, "label": label})
-    return {"status": "received"}
 
 
 @app.get("/api/history")

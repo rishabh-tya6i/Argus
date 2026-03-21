@@ -63,3 +63,21 @@ export interface ThreatAlert {
     domain_age_days?: number;
   };
 }
+
+export interface ScanFeedback {
+  id: number;
+  scan_id: number;
+  tenant_id: number;
+  analyst_user_id: number;
+  label: 'safe' | 'suspicious' | 'phishing';
+  notes: string | null;
+  created_at: string;
+  analyst?: User;
+}
+
+export interface ScanFeedbackAggregated {
+  scan_id: number;
+  majority_label: 'safe' | 'suspicious' | 'phishing';
+  feedback_count: number;
+  confidence: number;
+}

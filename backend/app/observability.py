@@ -317,6 +317,32 @@ try:
         ["worker"],
     )
 
+    # -- ML Training & Feedback --
+    ML_TRAINING_RUNS_TOTAL = Counter(
+        "ml_training_runs_total",
+        "Total ML training runs started",
+        ["model_name"],
+    )
+    ML_TRAINING_FAILURES_TOTAL = Counter(
+        "ml_training_failures_total",
+        "Total ML training run failures",
+        ["model_name"],
+    )
+    ML_MODEL_ACCURACY = Gauge(
+        "ml_model_accuracy",
+        "Latest trained model accuracy",
+        ["model_name"],
+    )
+    ML_FEEDBACK_COUNT = Counter(
+        "ml_feedback_count",
+        "Total analyst feedback submissions",
+        ["label"],
+    )
+    ML_FEEDBACK_AGREEMENT_RATE = Gauge(
+        "ml_feedback_agreement_rate",
+        "Rate of agreement between model prediction and analyst feedback",
+    )
+
     _PROMETHEUS_AVAILABLE = True
 
 except ImportError:  # pragma: no cover
@@ -356,6 +382,11 @@ except ImportError:  # pragma: no cover
     CASES_CREATED_TOTAL = _stub
     CASES_RESOLVED_TOTAL = _stub
     CASE_RESOLUTION_TIME = _stub
+    ML_TRAINING_RUNS_TOTAL = _stub
+    ML_TRAINING_FAILURES_TOTAL = _stub
+    ML_MODEL_ACCURACY = _stub
+    ML_FEEDBACK_COUNT = _stub
+    ML_FEEDBACK_AGREEMENT_RATE = _stub
 
 
 def update_worker_heartbeat(worker: str) -> None:
