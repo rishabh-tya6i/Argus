@@ -161,6 +161,27 @@ class ScanMetadata(Base):
     scan: Mapped["Scan"] = relationship("Scan", back_populates="scan_metadata")
 
 
+class EmailScan(Base):
+    __tablename__ = "email_scans"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True)
+    
+    email_id: Mapped[str] = mapped_column(String(255), unique=True, nullable=False, index=True)
+    subject: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    sender: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    
+    scan_id: Mapped[int] = mapped_column(ForeignKey("scans.id", ondelete="CASCADE"), nullable=False)
+    
+    detection_result: Mapped[str] = mapped_column(String(32), nullable=False)
+    risk_score: Mapped[float] = mapped_column(Float, nullable=False)
+    
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+
+    tenant: Mapped["Tenant"] = relationship("Tenant")
+    scan: Mapped["Scan"] = relationship("Scan")
+
+
 class AuditLog(Base):
     __tablename__ = "audit_logs"
 

@@ -1,55 +1,124 @@
 <!DOCTYPE html>
 <html>
 <head>
+  <meta charset="UTF-8">
   <style>
+    :root {
+      --primary: #6366f1;
+      --bg: #0f172a;
+      --card-bg: #1e293b;
+      --text: #f8fafc;
+      --text-dim: #94a3b8;
+      --safe: #10b981;
+      --phish: #ef4444;
+      --suspicious: #f59e0b;
+    }
     body {
-      width: 300px;
+      width: 320px;
+      margin: 0;
+      font-family: 'Inter', system-ui, -apple-system, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      padding: 16px;
+      overflow-x: hidden;
+    }
+    header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 24px;
+    }
+    .logo {
+      width: 32px;
+      height: 32px;
+    }
+    .title {
+      font-size: 1.25rem;
+      font-weight: 700;
+      letter-spacing: -0.025em;
+    }
+    .status-card {
+      background: var(--card-bg);
+      border-radius: 12px;
       padding: 20px;
-      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
       text-align: center;
+      box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+      border: 1px solid rgba(255, 255, 255, 0.05);
+      margin-bottom: 16px;
     }
-    h2 {
-      margin-top: 0;
-      color: #333;
+    .status-icon {
+      font-size: 40px;
+      margin-bottom: 8px;
     }
-    .status {
-      font-size: 18px;
-      font-weight: bold;
-      margin: 20px 0;
-      padding: 10px;
+    .status-text {
+      font-size: 1.5rem;
+      font-weight: 800;
+      margin-bottom: 4px;
+      text-transform: uppercase;
+    }
+    .confidence-badge {
+      display: inline-block;
+      padding: 4px 12px;
+      border-radius: 9999px;
+      font-size: 0.875rem;
+      font-weight: 600;
+      background: rgba(255, 255, 255, 0.1);
+    }
+    .reasons-list {
+      background: rgba(0, 0, 0, 0.2);
       border-radius: 8px;
+      padding: 12px;
+      text-align: left;
+      margin-top: 16px;
     }
-    .safe {
-      background-color: #d4edda;
-      color: #155724;
+    .reason-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+      margin-bottom: 8px;
+      font-size: 0.8rem;
+      color: var(--text-dim);
     }
-    .phishing {
-      background-color: #f8d7da;
-      color: #721c24;
+    .reason-item:last-child {
+      margin-bottom: 0;
     }
+    .safe { color: var(--safe); }
+    .phish { color: var(--phish); }
+    .suspicious { color: var(--suspicious); }
+    
     .loading {
-      color: #666;
+      animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
     }
-    button {
-      background-color: #007bff;
-      color: white;
-      border: none;
-      padding: 10px 20px;
-      border-radius: 5px;
-      cursor: pointer;
-      width: 100%;
-      margin-top: 10px;
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: .5; }
     }
-    button:hover {
-      background-color: #0056b3;
+    
+    footer {
+      text-align: center;
+      font-size: 0.75rem;
+      color: var(--text-dim);
+      margin-top: 24px;
     }
   </style>
 </head>
 <body>
-  <h2>Phishing Detector</h2>
-  <div id="status" class="status loading">Checking...</div>
-  <div id="details"></div>
-  <button id="report-btn">Report Incorrect</button>
+  <header>
+    <img src="icons/icon48.png" class="logo" onerror="this.src='https://raw.githubusercontent.com/lucide-icons/lucide/main/icons/shield.svg'">
+    <span class="title">Argus Security</span>
+  </header>
+  
+  <div id="content">
+    <div class="status-card loading">
+      <div class="status-icon">🔍</div>
+      <div class="status-text" style="font-size: 1rem;">Analyzing Page...</div>
+    </div>
+  </div>
+
+  <footer>
+    Real-time protection by Argus AI
+  </footer>
+
   <script src="popup.js"></script>
 </body>
 </html>

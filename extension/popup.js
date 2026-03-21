@@ -1,44 +1,54 @@
-document.addEventListener('DOMContentLoaded', async () => {
-    const statusDiv = document.getElementById('status');
-    const detailsDiv = document.getElementById('details');
+async function updateUI() {
+  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  if (!tab || !tab.url) return;
 
-    // Get current tab
-    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  chrome.storage.local.get(tab.url, (data) => {
+    const result = data[tab.url];
+    const content = document.getElementById('content');
 
-    if (!tab || !tab.url.startsWith('http')) {
-        statusDiv.textContent = "Not a web page";
-        statusDiv.className = "status";
-        return;
+    if (result) {
+      renderResult(content, result);
+    } else {
+      setTimeout(updateUI, 1000); // Retry if result isn't ready
     }
+  });
+}
 
-    try {
-        const response = await fetch("http://localhost:8000/api/predict", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ url: tab.url })
-        });
+function renderResult(container, result) {
+  let statusClass = 'safe';
+  let icon = '✅';
+  let statusText = 'Safe';
 
-        const data = await response.json();
+  if (result.prediction === 'phishing') {
+    statusClass = 'phish';
+    icon = '🚨';
+    statusText = 'Phishing';
+  } else if (result.prediction === 'suspicious') {
+    statusClass = 'suspicious';
+    icon = '⚠️';
+    statusText = 'Suspicious';
+  }
 
-        if (data.prediction === "phishing") {
-            statusDiv.textContent = "⚠️ PHISHING DETECTED";
-            statusDiv.className = "status phishing";
-        } else {
-            statusDiv.textContent = "✅ Safe Website";
-            statusDiv.className = "status safe";
-        }
+  const confidencePerc = (result.confidence * 100).toFixed(1);
 
-        detailsDiv.innerHTML = `
-      <p>Confidence: <strong>${(data.confidence * 100).toFixed(1)}%</strong></p>
-    `;
+  // Group reasons
+  const reasonsHtml = (result.explanation.reasons || []).map(r => `
+    <div class="reason-item">
+      <span>•</span>
+      <span>${r.message}</span>
+    </div>
+  `).join('') || '<div class="reason-item">No significant risks found.</div>';
 
-    } catch (error) {
-        statusDiv.textContent = "Error connecting to server";
-        statusDiv.className = "status";
-        console.error(error);
-    }
-});
+  container.innerHTML = `
+    <div class="status-card">
+      <div class="status-icon">${icon}</div>
+      <div class="status-text ${statusClass}">${statusText}</div>
+      <div class="confidence-badge">Confidence: ${confidencePerc}%</div>
+      <div class="reasons-list">
+        ${reasonsHtml}
+      </div>
+    </div>
+  `;
+}
 
-document.getElementById('report-btn').addEventListener('click', () => {
-    alert("Report feature coming soon!");
-});
+document.addEventListener('DOMContentLoaded', updateUI);
