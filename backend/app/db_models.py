@@ -523,6 +523,9 @@ class ModelVersion(Base):
     precision: Mapped[float] = mapped_column(Float, nullable=False)
     recall: Mapped[float] = mapped_column(Float, nullable=False)
     f1_score: Mapped[float] = mapped_column(Float, nullable=False)
+    roc_auc: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    
+    dataset_size: Mapped[int] = mapped_column(Integer, default=0)
     
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
     artifact_location: Mapped[str] = mapped_column(String(512), nullable=False)
@@ -541,4 +544,20 @@ class ScanFeatures(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
 
     scan: Mapped["Scan"] = relationship("Scan")
+
+
+class TrainingDataset(Base):
+    __tablename__ = "training_dataset"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    scan_id: Mapped[int] = mapped_column(ForeignKey("scans.id", ondelete="SET NULL"), nullable=True)
+    
+    features: Mapped[Dict[str, Any]] = mapped_column(JSON, nullable=False)
+    label: Mapped[FeedbackLabel] = mapped_column(Enum(FeedbackLabel), nullable=False)
+    confidence: Mapped[float] = mapped_column(Float, default=1.0)
+    
+    source: Mapped[str] = mapped_column(String(64), default="feedback") # e.g., 'feedback', 'seed_data'
+    is_used_for_training: Mapped[bool] = mapped_column(Boolean, default=False)
+    
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
 
