@@ -15,9 +15,10 @@ import logging
 from sqlalchemy.orm import Session
 
 from ..db import SessionLocal, init_db
-from ..db_models import SandboxRun, SandboxStatus
 from ..sandbox.queue import dequeue_sandbox_run
 from ..sandbox.runner import execute_sandbox_run
+from ..services.alert_service import create_security_alert
+from ..db_models import SandboxRun, SandboxStatus, SecurityAlertType, AlertSeverity
 from ..observability import (
     tracer,
     set_correlation_ctx,
@@ -72,6 +73,17 @@ async def process_single_run(run_id: int, db: Session) -> None:
             "Sandbox run completed",
             extra={**get_correlation_ctx(), "event": "sandbox_run_completed"},
         )
+
+        # Trigger security alert for high risk sandbox runs
+        if run.risk_score is not None and run.risk_score > 0.8:
+            create_security_alert(
+                db=db,
+                tenant_id=run.tenant_id,
+                alert_type=SecurityAlertType.SANDBOX_HIGH_RISK,
+                severity=AlertSeverity.critical if run.risk_score > 0.9 else AlertSeverity.high,
+                url=run.url,
+                sandbox_run_id=run.id,
+            )
     except Exception as exc:
         SANDBOX_RUNS_TOTAL.labels(status="failed").inc()
         QUEUE_JOBS_TOTAL.labels(worker=_WORKER, status="failed").inc()

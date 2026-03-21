@@ -20,6 +20,8 @@ from .routers_scans import router as scans_router
 from .routers_intel import router as intel_router
 from .routers_sandbox import router as sandbox_router
 from .routers_security_scans import router as security_scans_router
+from .routers_alerts import router as alerts_router
+from .routers_notification_channels import router as notification_channels_router
 from .sandbox.queue import enqueue_sandbox_run
 from .observability import (
     setup_tracing,
@@ -100,6 +102,8 @@ app.include_router(scans_router)
 app.include_router(intel_router)
 app.include_router(sandbox_router)
 app.include_router(security_scans_router)
+app.include_router(alerts_router)
+app.include_router(notification_channels_router)
 
 
 @app.get("/health", tags=["ops"])
@@ -250,6 +254,34 @@ def _maybe_enqueue_sandbox(
     QUEUE_DEPTH.labels(worker="sandbox").inc()
 
 
+def _maybe_create_scan_alert(
+    request: Request,
+    result: PredictResponse,
+    scan_id: int | None,
+    url: str,
+    db=Depends(get_db),
+):
+    from sqlalchemy.orm import Session
+    from .services.alert_service import create_security_alert
+    from .db_models import SecurityAlertType, AlertSeverity
+
+    tenant_id = getattr(request.state, "tenant_id", None)
+    if tenant_id is None:
+        return
+
+    # User threshold: scan confidence exceeds 0.85
+    if result.prediction == "phishing" and result.confidence > 0.85:
+        db_sess: Session = db
+        create_security_alert(
+            db=db_sess,
+            tenant_id=tenant_id,
+            alert_type=SecurityAlertType.PHISHING_DETECTED,
+            severity=AlertSeverity.critical if result.confidence > 0.95 else AlertSeverity.high,
+            url=url,
+            scan_id=scan_id,
+        )
+
+
 @app.post(
     "/api/predict",
     response_model=PredictResponse,
@@ -300,6 +332,9 @@ async def predict(
 
             # Auto-enqueue sandbox analysis for high-risk detections
             _maybe_enqueue_sandbox(request=request, result=result, scan_id=scan_id, url=req.url, db=db)
+
+            # Create security alert for high-confidence phishing
+            _maybe_create_scan_alert(request=request, result=result, scan_id=scan_id, url=req.url, db=db)
 
         except Exception as exc:
             logger.error(

@@ -20,8 +20,11 @@ from ..db_models import (
     SecurityScanArtifact,
     SecurityScanStatus,
     SecurityIssueSeverity,
-    ScanResult
+    ScanResult,
+    SecurityAlertType,
+    AlertSeverity
 )
+from ..services.alert_service import create_security_alert
 from ..services.domain_intel import evaluate_domain_for_url
 from ..schemas import ExplanationReason
 
@@ -293,6 +296,17 @@ async def execute_security_scan(db: Session, run: SecurityScanRun) -> None:
 
         db.add(run)
         db.commit()
+
+        # Alert Trigger: Security scanner detects critical issue
+        if any(issue.severity == SecurityIssueSeverity.CRITICAL for issue in issues):
+            create_security_alert(
+                db=db,
+                tenant_id=run.tenant_id,
+                alert_type=SecurityAlertType.CRITICAL_SECURITY_ISSUE,
+                severity=AlertSeverity.critical,
+                url=run.url,
+                security_scan_run_id=run.id,
+            )
 
     except Exception as e:
         run.status = SecurityScanStatus.failed

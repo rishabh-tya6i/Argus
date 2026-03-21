@@ -11,6 +11,8 @@ import { SandboxPage } from './pages/Sandbox/SandboxPage';
 import { ThreatIntelPage } from './pages/ThreatIntel/ThreatIntelPage';
 import { TenantAdminPage } from './pages/Admin/TenantAdminPage';
 import { SecurityScannerPage } from './pages/SecurityScanner/SecurityScannerPage';
+import { AlertsPage } from './pages/Alerts/AlertsPage';
+import { NotificationSettingsPage } from './pages/Alerts/NotificationSettingsPage';
 
 export const MainRouter = () => {
   const { isAuthenticated } = useAuth();
@@ -28,6 +30,8 @@ export const MainRouter = () => {
         <Route path="/sandbox/:id" element={<SandboxPage />} />
         <Route path="/security-scanner" element={<SecurityScannerPage />} />
         <Route path="/intel" element={<ThreatIntelPage />} />
+        <Route path="/alerts" element={<AlertsPage />} />
+        <Route path="/settings/notifications" element={<NotificationSettingsPage />} />
         <Route path="/admin" element={<TenantAdminPage />} />
       </Route>
     </Routes>

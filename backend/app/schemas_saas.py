@@ -5,7 +5,17 @@ from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, EmailStr, Field
 
-from .db_models import UserRole, TenantStatus, AlertStatus, SandboxStatus, SecurityScanStatus, SecurityIssueSeverity
+from .db_models import (
+    UserRole,
+    TenantStatus,
+    AlertStatus,
+    SandboxStatus,
+    SecurityScanStatus,
+    SecurityIssueSeverity,
+    SecurityAlertType,
+    AlertSeverity,
+    NotificationChannelType,
+)
 
 
 class TokenResponse(BaseModel):
@@ -224,3 +234,42 @@ class SecurityScanResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class SecurityAlertResponse(BaseModel):
+    id: int
+    tenant_id: int
+    alert_type: SecurityAlertType
+    severity: AlertSeverity
+    url: Optional[str]
+    domain: Optional[str]
+    scan_id: Optional[int]
+    sandbox_run_id: Optional[int]
+    security_scan_run_id: Optional[int]
+    created_at: datetime
+    status: AlertStatus
+
+    class Config:
+        from_attributes = True
+
+
+class AlertStatusUpdate(BaseModel):
+    status: AlertStatus
+
+
+class NotificationChannelResponse(BaseModel):
+    id: int
+    tenant_id: int
+    type: NotificationChannelType
+    config: Dict[str, Any]
+    is_active: bool
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class NotificationChannelCreateRequest(BaseModel):
+    type: NotificationChannelType
+    config: Dict[str, Any]
+    is_active: bool = True
