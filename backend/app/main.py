@@ -26,7 +26,10 @@ from .routers_notification_channels import router as notification_channels_route
 from .routers_feedback import router as feedback_router
 from .routers_models import router as models_router
 from .routers_prediction import router as prediction_router
+from .routers_detection import router as detection_router
+from .routers_gmail import router as gmail_router
 from .sandbox.queue import enqueue_sandbox_run
+from fastapi import WebSocket, WebSocketDisconnect
 from .observability import (
     setup_tracing,
     setup_logging,
@@ -62,6 +65,36 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+class ConnectionManager:
+    def __init__(self):
+        self.active_connections: list[WebSocket] = []
+
+    async def connect(self, websocket: WebSocket):
+        await websocket.accept()
+        self.active_connections.append(websocket)
+
+    def disconnect(self, websocket: WebSocket):
+        self.active_connections.remove(websocket)
+
+    async def broadcast(self, message: dict):
+        for connection in self.active_connections:
+            try:
+                await connection.send_json(message)
+            except Exception:
+                # Handle stale connections
+                pass
+
+manager = ConnectionManager()
+
+@app.websocket("/ws/scans")
+async def websocket_endpoint(websocket: WebSocket):
+    await manager.connect(websocket)
+    try:
+        while True:
+            await websocket.receive_text()
+    except WebSocketDisconnect:
+        manager.disconnect(websocket)
 
 # --- Prometheus HTTP instrumentation ---
 try:
@@ -109,9 +142,10 @@ app.include_router(security_scans_router)
 app.include_router(alerts_router)
 app.include_router(cases_router)
 app.include_router(notification_channels_router)
-app.include_router(feedback_router)
 app.include_router(models_router)
 app.include_router(prediction_router)
+app.include_router(detection_router)
+app.include_router(gmail_router)
 
 
 @app.get("/health", tags=["ops"])
@@ -232,6 +266,20 @@ def _maybe_persist_scan(
         logger.error(f"Failed to extract/save features: {exc}")
 
     db_sess.commit()
+    
+    # Broadcast to all connected clients
+    import asyncio
+    asyncio.create_task(manager.broadcast({
+        "type": "NEW_SCAN",
+        "data": {
+            "id": scan.id,
+            "url": scan.url,
+            "prediction": result.prediction,
+            "confidence": result.confidence,
+            "timestamp": datetime.utcnow().isoformat()
+        }
+    }))
+    
     return scan.id
 
 

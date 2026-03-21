@@ -1,3 +1,4 @@
+from datetime import datetime
 from pydantic import BaseModel, Field
 from typing import Optional, List, Dict
 
@@ -48,3 +49,18 @@ class MetricsResponse(BaseModel):
     precision: float
     recall: float
     f1: float
+
+
+class EmailScanResponse(BaseModel):
+    id: int
+    email_id: str
+    subject: Optional[str]
+    sender: Optional[str]
+    scan_id: int
+    detection_result: str
+    risk_score: float
+    created_at: datetime
+
+
+class SyncGmailRequest(BaseModel):
+    user_id: int
