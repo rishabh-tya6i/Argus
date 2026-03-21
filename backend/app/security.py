@@ -5,12 +5,9 @@ from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, Optional, Tuple
 
 import jwt
-from passlib.context import CryptContext
+import bcrypt
 
 from .db_models import User, APIKey, UserRole
-
-
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 JWT_SECRET = os.getenv("JWT_SECRET", "change-me-in-production")
 JWT_ALGORITHM = os.getenv("JWT_ALGORITHM", "HS256")
@@ -21,11 +18,14 @@ API_KEY_HASH_SECRET = os.getenv("API_KEY_HASH_SECRET", JWT_SECRET)
 
 
 def hash_password(password: str) -> str:
-    return pwd_context.hash(password)
+    return bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
 
 
 def verify_password(password: str, password_hash: str) -> bool:
-    return pwd_context.verify(password, password_hash)
+    try:
+        return bcrypt.checkpw(password.encode("utf-8"), password_hash.encode("utf-8"))
+    except Exception:
+        return False
 
 
 def create_access_token(user: User) -> str:
@@ -59,13 +59,18 @@ def decode_token(token: str) -> Dict[str, Any]:
 
 
 def hash_api_key(raw_key: str) -> str:
-    # Derive a stable hash using the same password hashing context for simplicity
-    # combined with an application-level secret.
-    return pwd_context.hash(API_KEY_HASH_SECRET + raw_key)
+    # Derive a stable hash combined with an application-level secret.
+    # Note: bcrypt has a 72 byte limit for passwords.
+    secret_key = (API_KEY_HASH_SECRET + raw_key)[:72]
+    return bcrypt.hashpw(secret_key.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
 
 
 def verify_api_key(raw_key: str, key_hash: str) -> bool:
-    return pwd_context.verify(API_KEY_HASH_SECRET + raw_key, key_hash)
+    try:
+        secret_key = (API_KEY_HASH_SECRET + raw_key)[:72]
+        return bcrypt.checkpw(secret_key.encode("utf-8"), key_hash.encode("utf-8"))
+    except Exception:
+        return False
 
 
 def extract_api_key_prefix(raw_key: str) -> str:

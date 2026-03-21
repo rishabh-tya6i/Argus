@@ -3,6 +3,7 @@ import { Routes, Route, Navigate } from 'react-router-dom';
 import { useAuth } from './context/AuthContext';
 import { DashboardLayout } from './layouts/DashboardLayout';
 import { LoginPage } from './pages/Auth/LoginPage';
+import { SignupPage } from './pages/Auth/SignupPage';
 import { DashboardPage } from './pages/Dashboard/DashboardPage';
 import { ScansPage } from './pages/Scans/ScansPage';
 import { ScanDetailsPage } from './pages/Scans/ScanDetailsPage';
@@ -17,6 +18,7 @@ export const MainRouter = () => {
   return (
     <Routes>
       <Route path="/login" element={!isAuthenticated ? <LoginPage /> : <Navigate to="/" />} />
+      <Route path="/signup" element={!isAuthenticated ? <SignupPage /> : <Navigate to="/" />} />
       
       <Route element={isAuthenticated ? <DashboardLayout /> : <Navigate to="/login" />}>
         <Route path="/" element={<DashboardPage />} />

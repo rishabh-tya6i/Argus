@@ -19,5 +19,9 @@ export const sandboxApi = {
   getRunEvents: async (id: number | string): Promise<any[]> => {
     const response = await apiClient.get(`/sandbox/runs/${id}/events`);
     return response.data;
+  },
+  createRun: async (url: string): Promise<SandboxRun> => {
+    const response = await apiClient.post('/sandbox/run', { url });
+    return response.data;
   }
 };

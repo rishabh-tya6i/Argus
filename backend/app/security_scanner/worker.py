@@ -8,8 +8,11 @@ from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Tuple, Set
 
+import logging
 from sqlalchemy.orm import Session
 from bs4 import BeautifulSoup
+
+logger = logging.getLogger(__name__)
 
 from ..db_models import (
     SecurityScanRun,
@@ -297,3 +300,47 @@ async def execute_security_scan(db: Session, run: SecurityScanRun) -> None:
         run.summary = f"Security Scan failed: {e}"
         db.add(run)
         db.commit()
+
+
+async def worker_loop() -> None:
+    from ..db import SessionLocal, init_db
+    from .queue import dequeue_security_scan
+    from ..db_models import SecurityScanRun, SecurityScanStatus
+    from ..observability import update_worker_heartbeat, set_correlation_ctx, setup_logging
+
+    setup_logging()
+    init_db()
+    _WORKER = "security_scanner"
+    logger.info(f"Starting { _WORKER} worker loop")
+    set_correlation_ctx(worker_name=_WORKER)
+    db = SessionLocal()
+    try:
+        while True:
+            update_worker_heartbeat(_WORKER)
+
+            # Prefer Redis queue
+            run_id = dequeue_security_scan(block=True, timeout=10)
+            if run_id is not None:
+                run = db.query(SecurityScanRun).filter(SecurityScanRun.id == run_id).first()
+                if run:
+                    set_correlation_ctx(worker_name=_WORKER, scan_id=f"security_{run.id}")
+                    await execute_security_scan(db, run)
+                continue
+
+            # Fallback: poll DB
+            run = db.query(SecurityScanRun).filter(SecurityScanRun.status == SecurityScanStatus.queued).first()
+            if run:
+                await execute_security_scan(db, run)
+                continue
+
+            await asyncio.sleep(5)
+    finally:
+        db.close()
+
+
+def main() -> None:
+    asyncio.run(worker_loop())
+
+
+if __name__ == "__main__":
+    main()

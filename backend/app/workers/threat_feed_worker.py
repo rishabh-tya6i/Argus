@@ -29,6 +29,7 @@ from backend.app.observability import (
     set_correlation_ctx,
     get_correlation_ctx,
     update_worker_heartbeat,
+    setup_logging,
     THREAT_INTEL_ALERTS_TOTAL,
     WORKER_FAILURES_TOTAL,
     QUEUE_JOBS_TOTAL,
@@ -218,13 +219,23 @@ def ingest_feeds(db: Session, sources: List[ThreatFeedSource]) -> None:
                 )
 
 
+import time
+
 def main() -> None:  # pragma: no cover - manual execution entrypoint
+    setup_logging()
     init_db()
     set_correlation_ctx(worker_name=_WORKER)
     db = SessionLocal()
     try:
-        sources: List[ThreatFeedSource] = []  # populate with real sources
-        ingest_feeds(db, sources)
+        while True:
+            logger.info(f"Starting threat feed ingestion loop for {_WORKER}")
+            sources: List[ThreatFeedSource] = []  # populate with real sources
+            ingest_feeds(db, sources)
+            
+            update_worker_heartbeat(_WORKER)
+            logger.info(f"Ingestion complete. Sleeping for 1 hour...")
+            # Sleep for 1 hour before next ingestion
+            time.sleep(3600)
     finally:
         db.close()
 

@@ -23,6 +23,7 @@ from ..observability import (
     set_correlation_ctx,
     get_correlation_ctx,
     update_worker_heartbeat,
+    setup_logging,
     SANDBOX_RUNS_TOTAL,
     WORKER_FAILURES_TOTAL,
     QUEUE_DEPTH,
@@ -92,7 +93,9 @@ async def process_single_run(run_id: int, db: Session) -> None:
 
 
 async def worker_loop() -> None:  # pragma: no cover - manual process
+    setup_logging()
     init_db()
+    logger.info(f"Starting {_WORKER} worker loop")
     set_correlation_ctx(worker_name=_WORKER)
     db = SessionLocal()
     try:

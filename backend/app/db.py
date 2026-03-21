@@ -46,9 +46,13 @@ def init_db() -> None:
 
     # Attempt to create the vector extension if using PostgreSQL
     if engine.dialect.name == "postgresql":
-        with engine.begin() as conn:
-            from sqlalchemy import text
-            conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
+        try:
+            with engine.begin() as conn:
+                from sqlalchemy import text
+                conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
+        except Exception:
+            # Ignore errors if extension already exists or concurrent creation fails
+            pass
 
     Base.metadata.create_all(bind=engine)
 

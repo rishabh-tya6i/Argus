@@ -26,6 +26,7 @@ kubectl delete -f "$MANIFEST_DIR/hpa.yaml" --ignore-not-found
 
 echo "⟳  Deleting application deployments..."
 kubectl delete -f "$MANIFEST_DIR/deployments.yaml" --ignore-not-found
+kubectl delete -f "$MANIFEST_DIR/frontend.yaml" --ignore-not-found
 
 echo "⟳  Deleting services..."
 kubectl delete -f "$MANIFEST_DIR/services.yaml" --ignore-not-found
