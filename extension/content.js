@@ -15,6 +15,7 @@ function extractSecurityData() {
   const forms = [];
   document.querySelectorAll('form').forEach(form => {
     const hasPassword = !!form.querySelector('input[type="password"]');
+    const hasHiddenFields = !!form.querySelector('input[type="hidden"]');
     
     // Check if the form action points to a different domain
     let isCrossDomain = false;
@@ -29,6 +30,7 @@ function extractSecurityData() {
       action: form.action,
       method: form.method || 'GET',
       hasPassword: hasPassword,
+      hasHiddenFields: hasHiddenFields,
       crossDomain: isCrossDomain
     });
   });

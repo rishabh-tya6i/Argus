@@ -36,14 +36,15 @@ def create_security_scan(
 
 
 @router.get("", response_model=List[SecurityScanResponse])
-def list_security_scans(tenant: CurrentTenant, db: Session = Depends(get_db)):
-    runs = (
+def list_security_scans(tenant: CurrentTenant, url: str | None = None, db: Session = Depends(get_db)):
+    query = (
         db.query(SecurityScanRun)
         .filter(SecurityScanRun.tenant_id == tenant.id)
-        .order_by(SecurityScanRun.id.desc())
-        .limit(100)
-        .all()
     )
+    if url:
+        query = query.filter(SecurityScanRun.url == url)
+    
+    runs = query.order_by(SecurityScanRun.id.desc()).limit(100).all()
     return runs
 
 

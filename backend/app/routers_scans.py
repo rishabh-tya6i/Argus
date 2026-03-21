@@ -55,15 +55,16 @@ def _persist_scan(
 
 
 @router.get("/scans", response_model=list[ScanSummaryResponse])
-def list_scans(tenant: CurrentTenant, db: Session = Depends(get_db)):
-    scans = (
+def list_scans(tenant: CurrentTenant, url: str | None = None, db: Session = Depends(get_db)):
+    query = (
         db.query(Scan, ScanResult)
         .join(ScanResult, Scan.id == ScanResult.scan_id)
         .filter(Scan.tenant_id == tenant.id)
-        .order_by(Scan.created_at.desc())
-        .limit(100)
-        .all()
     )
+    if url:
+        query = query.filter(Scan.url == url)
+    
+    scans = query.order_by(Scan.created_at.desc()).limit(100).all()
     response: list[ScanSummaryResponse] = []
     for scan, result in scans:
         response.append(
