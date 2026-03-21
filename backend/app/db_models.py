@@ -75,6 +75,12 @@ class User(Base):
     tenant: Mapped["Tenant"] = relationship("Tenant", back_populates="users")
     scans: Mapped[list["Scan"]] = relationship("Scan", back_populates="created_by_user")
     audit_logs: Mapped[list["AuditLog"]] = relationship("AuditLog", back_populates="user")
+    assigned_cases: Mapped[list["InvestigationCase"]] = relationship(
+        "InvestigationCase", foreign_keys="InvestigationCase.assigned_to_user_id", back_populates="assigned_to"
+    )
+    created_cases: Mapped[list["InvestigationCase"]] = relationship(
+        "InvestigationCase", foreign_keys="InvestigationCase.created_by_user_id", back_populates="created_by"
+    )
 
 
 class APIKey(Base):
@@ -233,6 +239,13 @@ class AlertSeverity(str, enum.Enum):
     low = "low"
 
 
+class CaseStatus(str, enum.Enum):
+    open = "open"
+    in_progress = "in_progress"
+    resolved = "resolved"
+    closed = "closed"
+
+
 class SecurityAlert(Base):
     __tablename__ = "security_alerts"
 
@@ -253,6 +266,7 @@ class SecurityAlert(Base):
     status: Mapped[AlertStatus] = mapped_column(Enum(AlertStatus), default=AlertStatus.open, nullable=False)
 
     tenant: Mapped["Tenant"] = relationship("Tenant")
+    case_mappings: Mapped[list["CaseAlertMapping"]] = relationship("CaseAlertMapping", back_populates="alert")
 
 
 class NotificationChannelType(str, enum.Enum):
@@ -411,4 +425,59 @@ class BrandTemplate(Base):
     login_url: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+
+
+class InvestigationCase(Base):
+    __tablename__ = "investigation_cases"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True)
+
+    title: Mapped[str] = mapped_column(String(255), nullable=False)
+    description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    severity: Mapped[AlertSeverity] = mapped_column(Enum(AlertSeverity), nullable=False)
+    status: Mapped[CaseStatus] = mapped_column(Enum(CaseStatus), default=CaseStatus.open, nullable=False)
+
+    assigned_to_user_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
+    created_by_user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False, index=True)
+
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime,
+        default=datetime.utcnow,
+        onupdate=datetime.utcnow,
+        nullable=False,
+    )
+
+    tenant: Mapped["Tenant"] = relationship("Tenant")
+    assigned_to: Mapped[Optional["User"]] = relationship("User", foreign_keys=[assigned_to_user_id], back_populates="assigned_cases")
+    created_by: Mapped["User"] = relationship("User", foreign_keys=[created_by_user_id], back_populates="created_cases")
+    
+    alert_mappings: Mapped[list["CaseAlertMapping"]] = relationship("CaseAlertMapping", back_populates="case", cascade="all,delete-orphan")
+    comments: Mapped[list["CaseComment"]] = relationship("CaseComment", back_populates="case", cascade="all,delete-orphan")
+
+
+class CaseAlertMapping(Base):
+    __tablename__ = "case_alert_mappings"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    case_id: Mapped[int] = mapped_column(ForeignKey("investigation_cases.id", ondelete="CASCADE"), nullable=False)
+    alert_id: Mapped[int] = mapped_column(ForeignKey("security_alerts.id", ondelete="CASCADE"), nullable=False)
+
+    case: Mapped["InvestigationCase"] = relationship("InvestigationCase", back_populates="alert_mappings")
+    alert: Mapped["SecurityAlert"] = relationship("SecurityAlert", back_populates="case_mappings")
+
+
+class CaseComment(Base):
+    __tablename__ = "case_comments"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    case_id: Mapped[int] = mapped_column(ForeignKey("investigation_cases.id", ondelete="CASCADE"), nullable=False)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
+    
+    comment: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+
+    case: Mapped["InvestigationCase"] = relationship("InvestigationCase", back_populates="comments")
+    user: Mapped["User"] = relationship("User")
 

@@ -13,6 +13,8 @@ import { TenantAdminPage } from './pages/Admin/TenantAdminPage';
 import { SecurityScannerPage } from './pages/SecurityScanner/SecurityScannerPage';
 import { AlertsPage } from './pages/Alerts/AlertsPage';
 import { NotificationSettingsPage } from './pages/Alerts/NotificationSettingsPage';
+import { InvestigationsList } from './pages/Investigations/InvestigationsList';
+import { InvestigationDetail } from './pages/Investigations/InvestigationDetail';
 
 export const MainRouter = () => {
   const { isAuthenticated } = useAuth();
@@ -31,6 +33,8 @@ export const MainRouter = () => {
         <Route path="/security-scanner" element={<SecurityScannerPage />} />
         <Route path="/intel" element={<ThreatIntelPage />} />
         <Route path="/alerts" element={<AlertsPage />} />
+        <Route path="/investigations" element={<InvestigationsList />} />
+        <Route path="/investigations/:id" element={<InvestigationDetail />} />
         <Route path="/settings/notifications" element={<NotificationSettingsPage />} />
         <Route path="/admin" element={<TenantAdminPage />} />
       </Route>

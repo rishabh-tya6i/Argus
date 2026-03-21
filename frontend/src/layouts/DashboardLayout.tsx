@@ -1,6 +1,6 @@
 import React from 'react';
 import { Outlet, Link, useLocation } from 'react-router-dom';
-import { Shield, Search, LayoutDashboard, Box, ShieldAlert, Settings, LogOut, Bell, MessageSquare } from 'lucide-react';
+import { Shield, Search, LayoutDashboard, Box, ShieldAlert, Settings, LogOut, Bell, MessageSquare, Briefcase } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
 export const DashboardLayout = () => {
@@ -10,6 +10,7 @@ export const DashboardLayout = () => {
   const navItems = [
     { label: 'Dashboard', path: '/', icon: LayoutDashboard },
     { label: 'Alerts', path: '/alerts', icon: Bell },
+    { label: 'Investigations', path: '/investigations', icon: Briefcase },
     { label: 'Scans', path: '/scans', icon: Search },
     { label: 'Sandbox', path: '/sandbox', icon: Box },
     { label: 'Security Scanner', path: '/security-scanner', icon: ShieldAlert },

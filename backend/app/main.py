@@ -21,6 +21,7 @@ from .routers_intel import router as intel_router
 from .routers_sandbox import router as sandbox_router
 from .routers_security_scans import router as security_scans_router
 from .routers_alerts import router as alerts_router
+from .routers_cases import router as cases_router
 from .routers_notification_channels import router as notification_channels_router
 from .sandbox.queue import enqueue_sandbox_run
 from .observability import (
@@ -103,6 +104,7 @@ app.include_router(intel_router)
 app.include_router(sandbox_router)
 app.include_router(security_scans_router)
 app.include_router(alerts_router)
+app.include_router(cases_router)
 app.include_router(notification_channels_router)
 
 

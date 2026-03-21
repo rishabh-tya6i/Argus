@@ -1,7 +1,8 @@
 import React from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { alertsApi, SecurityAlert } from '../../api/alerts';
-import { Bell, ShieldAlert, CheckCircle, Clock } from 'lucide-react';
+import { Bell, ShieldAlert, CheckCircle, Clock, Briefcase, PlusCircle } from 'lucide-react';
+import { CreateCaseModal } from './CreateCaseModal';
 
 export const AlertsPage = () => {
     const queryClient = useQueryClient();
@@ -9,6 +10,8 @@ export const AlertsPage = () => {
         queryKey: ['alerts'],
         queryFn: () => alertsApi.getAlerts()
     });
+
+    const [selectedForCase, setSelectedForCase] = React.useState<number[] | null>(null);
 
     const statusMutation = useMutation({
         mutationFn: ({ id, status }: { id: number, status: 'acknowledged' | 'resolved' }) => 
@@ -102,6 +105,12 @@ export const AlertsPage = () => {
                                                 <CheckCircle className="w-3 h-3 mr-1" /> Resolve
                                             </button>
                                         )}
+                                        <button 
+                                            onClick={() => setSelectedForCase([alert.id])}
+                                            className="btn btn-ghost btn-xs border border-base-300 hover:bg-primary hover:text-primary-content"
+                                        >
+                                            <Briefcase className="w-3 h-3 mr-1" /> Case
+                                        </button>
                                     </div>
                                 </div>
                             </div>
@@ -117,6 +126,13 @@ export const AlertsPage = () => {
                     </div>
                 )}
             </div>
+
+            {selectedForCase && (
+                <CreateCaseModal 
+                    alertIds={selectedForCase}
+                    onClose={() => setSelectedForCase(null)}
+                />
+            )}
         </div>
     );
 };
