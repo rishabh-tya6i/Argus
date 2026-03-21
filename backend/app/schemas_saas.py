@@ -15,6 +15,7 @@ from .db_models import (
     SecurityAlertType,
     AlertSeverity,
     NotificationChannelType,
+    CaseStatus,
 )
 
 
@@ -273,3 +274,67 @@ class NotificationChannelCreateRequest(BaseModel):
     type: NotificationChannelType
     config: Dict[str, Any]
     is_active: bool = True
+
+
+class CaseCommentResponse(BaseModel):
+    id: int
+    case_id: int
+    user_id: int
+    comment: str
+    created_at: datetime
+    user: Optional[UserResponse] = None
+
+    class Config:
+        from_attributes = True
+
+
+class InvestigationCaseResponse(BaseModel):
+    id: int
+    tenant_id: int
+    title: str
+    description: Optional[str]
+    severity: AlertSeverity
+    status: CaseStatus
+    assigned_to_user_id: Optional[int]
+    created_by_user_id: int
+    created_at: datetime
+    updated_at: datetime
+
+    assigned_to: Optional[UserResponse] = None
+    created_by: Optional[UserResponse] = None
+    alerts: List[SecurityAlertResponse] = Field(default_factory=list, alias="alerts")
+
+    class Config:
+        from_attributes = True
+        populate_by_name = True
+
+
+class CaseCreateRequest(BaseModel):
+    title: str
+    description: Optional[str] = None
+    severity: AlertSeverity = AlertSeverity.medium
+    alert_ids: List[int] = Field(default_factory=list)
+
+
+class CaseUpdateRequest(BaseModel):
+    title: Optional[str] = None
+    description: Optional[str] = None
+    severity: Optional[AlertSeverity] = None
+    status: Optional[CaseStatus] = None
+    assigned_to_user_id: Optional[int] = None
+
+
+class CaseCommentCreateRequest(BaseModel):
+    comment: str
+
+
+class CaseLinkAlertsRequest(BaseModel):
+    alert_ids: List[int]
+
+
+class CaseStatusUpdateRequest(BaseModel):
+    status: CaseStatus
+
+
+class CaseAssignRequest(BaseModel):
+    user_id: Optional[int]

@@ -92,4 +92,16 @@ async def update_alert_status(
     db.commit()
     db.refresh(alert)
 
+    # Optional: If alert is resolved, notify linked cases
+    if alert.status == AlertStatus.resolved:
+        from .services import case_service
+        for mapping in alert.case_mappings:
+            case_service.add_comment(
+                db,
+                alert.tenant_id,
+                current_user.id,
+                mapping.case_id,
+                f"Linked Alert ID {alert.id} was resolved. Status: {alert.status.value}",
+            )
+
     return alert

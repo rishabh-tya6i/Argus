@@ -263,6 +263,24 @@ try:
         ["status"],
     )
 
+    # -- Cases --
+    CASES_CREATED_TOTAL = Counter(
+        "cases_created_total",
+        "Total investigation cases created",
+        ["severity"],
+    )
+    CASES_RESOLVED_TOTAL = Counter(
+        "cases_resolved_total",
+        "Total investigation cases resolved",
+        ["severity"],
+    )
+    CASE_RESOLUTION_TIME = Histogram(
+        "case_resolution_time_seconds",
+        "Time taken to resolve a case",
+        ["severity"],
+        buckets=(300, 3600, 10800, 21600, 43200, 86400, 172800, 604800),
+    )
+
     # -- Queue metrics --
     QUEUE_DEPTH = Gauge(
         "queue_depth",
@@ -335,6 +353,9 @@ except ImportError:  # pragma: no cover
     ALERTS_SENT_TOTAL = _stub
     ALERTS_FAILED_TOTAL = _stub
     ALERTS_BY_SEVERITY = _stub
+    CASES_CREATED_TOTAL = _stub
+    CASES_RESOLVED_TOTAL = _stub
+    CASE_RESOLUTION_TIME = _stub
 
 
 def update_worker_heartbeat(worker: str) -> None:
