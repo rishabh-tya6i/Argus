@@ -1,185 +1,184 @@
 # Argus
 
-Argus is an intelligent phishing detection and web security analysis platform designed to identify malicious websites using a combination of machine learning, threat intelligence, sandbox execution, and distributed monitoring.
+<p align="center">
+  <img src="https://img.shields.io/badge/Argus-Cybersecurity%20Platform-0A192F?style=for-the-badge&logo=shield&logoColor=white" />
+</p>
 
-The system is built as a modular, multi-tenant security platform capable of operating as a SaaS security service or as a self-hosted phishing detection infrastructure.
-
-Argus combines static analysis, dynamic browser sandboxing, domain intelligence, and developer integrations to provide explainable phishing detection and automated website security analysis.
-
----
-
-# Project Status
-
-![Build](https://img.shields.io/badge/build-active-success)
-![Security](https://img.shields.io/badge/security-research-blue)
-![Platform](https://img.shields.io/badge/platform-kubernetes-informational)
-![Language](https://img.shields.io/badge/python-3.11-blue)
-![License](https://img.shields.io/badge/license-pending-lightgrey)
+<p align="center">
+  <img src="https://img.shields.io/badge/Detection-Hybrid%20AI-blue?style=flat-square" />
+  <img src="https://img.shields.io/badge/Latency-<300ms-success?style=flat-square" />
+  <img src="https://img.shields.io/badge/Architecture-Distributed-informational?style=flat-square" />
+  <img src="https://img.shields.io/badge/Deployment-Kubernetes-blue?style=flat-square" />
+</p>
 
 ---
 
-# Tech Stack
+## Overview
 
-## Languages
+Argus is an intelligent phishing detection and web security analysis platform designed to identify malicious websites using a **multi-layer hybrid detection system**.
 
-![Python](https://img.shields.io/badge/python-3.11-blue)
-![TypeScript](https://img.shields.io/badge/typescript-frontend-blue)
-![SQL](https://img.shields.io/badge/sql-postgresql-blue)
+It combines:
 
-## Backend
+* Machine Learning inference
+* Rule-based heuristics
+* Threat intelligence
+* Dynamic sandbox execution
 
-![FastAPI](https://img.shields.io/badge/framework-fastapi-green)
-![SQLAlchemy](https://img.shields.io/badge/orm-sqlalchemy-orange)
-![Redis](https://img.shields.io/badge/cache-redis-red)
-
-## Security & Analysis
-
-![Playwright](https://img.shields.io/badge/sandbox-playwright-black)
-![Chromium](https://img.shields.io/badge/browser-chromium-lightgrey)
-![Threat Intelligence](https://img.shields.io/badge/threat-intelligence-purple)
-
-## Infrastructure
-
-![Docker](https://img.shields.io/badge/container-docker-blue)
-![Kubernetes](https://img.shields.io/badge/orchestration-kubernetes-blue)
-![Prometheus](https://img.shields.io/badge/monitoring-prometheus-orange)
-![Grafana](https://img.shields.io/badge/visualization-grafana-yellow)
+to deliver **high-confidence, explainable phishing detection** in real time.
 
 ---
 
-# Core Capabilities
-
-## Phishing Detection
-
-Argus detects phishing websites using a multi-layer detection pipeline.
-
-Signals include:
-
-* URL entropy and keyword analysis
-* login form detection
-* credential harvesting detection
-* obfuscated JavaScript analysis
-* redirect chain inspection
-* domain reputation scoring
-
----
-
-## Visual Brand Impersonation Detection
-
-Argus analyzes page screenshots to detect visual similarities with legitimate login portals such as:
-
-* Google
-* Microsoft
-* AWS
-* PayPal
-* Apple
-* GitHub
-
-This enables detection of phishing pages that mimic trusted services.
-
----
-
-## Threat Intelligence
-
-Argus integrates domain intelligence signals including:
-
-* certificate transparency monitoring
-* newly registered domain detection
-* typosquatting detection
-* homograph attack detection
-* threat feed ingestion
-
----
-
-## Sandbox Dynamic Analysis
-
-Suspicious websites are executed in an isolated Chromium environment.
-
-The sandbox observes:
-
-* network requests
-* redirect chains
-* JavaScript execution
-* credential submission behavior
-* DOM mutations
-
-Artifacts include screenshots and HTML snapshots.
-
----
-
-# Detection Pipeline
-
-The phishing detection engine processes requests through multiple layers.
+## Core System (High-Level)
 
 ```mermaid
 flowchart LR
-A[Incoming URL] --> B[URL Heuristics]
-B --> C[HTML Analysis]
-C --> D[Visual Screenshot Analysis]
-D --> E[Domain Reputation]
-E --> F[Threat Intelligence]
-F --> G[Final Risk Score]
+A[Input URL / Email] --> B[Detection Orchestrator]
+B --> C[ML Model]
+B --> D[Rule Engine]
+B --> E[Threat Intelligence]
+C --> F[Hybrid Scoring]
+D --> F
+E --> F
+F --> G[Explainable Result]
 ```
 
 ---
 
-# Sandbox Execution Workflow
+## Platform Capabilities
+
+### Detection Engine
+
+* Hybrid scoring (ML + Rules + Threat Intel)
+* URL entropy and pattern analysis
+* Credential harvesting detection
+* Redirect chain tracking
+* JavaScript behavior inspection
+
+---
+
+### Visual Impersonation Detection
+
+* Screenshot-based similarity analysis
+* Detects phishing clones of major platforms:
+
+  * Google
+  * Microsoft
+  * AWS
+  * PayPal
+  * Apple
+  * GitHub
+
+---
+
+### Threat Intelligence
+
+* Newly registered domain detection
+* Typosquatting analysis
+* Homograph attack detection
+* Certificate transparency monitoring
+* External threat feed ingestion
+
+---
+
+### Sandbox Analysis
 
 ```mermaid
 sequenceDiagram
-User->>Argus API: Submit suspicious URL
-Argus API->>Redis Queue: Create sandbox job
-Worker->>Headless Browser: Launch sandbox
-Headless Browser->>Website: Load page
-Website-->>Worker: Network activity
-Worker->>Database: Store artifacts
-Worker->>Argus API: Return analysis results
+User->>API: Submit URL
+API->>Queue: Create job
+Worker->>Browser: Launch sandbox
+Browser->>Website: Execute page
+Website-->>Worker: Behavior signals
+Worker->>DB: Store artifacts
+Worker->>API: Return results
 ```
+
+* Headless Chromium execution
+* Network and redirect tracking
+* DOM mutation analysis
+* Credential interaction monitoring
 
 ---
 
-# Platform Architecture
-
-Argus is designed using a distributed microservice architecture.
+## System Architecture
 
 ```mermaid
 graph TD
 
-Client[Client Applications]
+Client[Client / Extension / Gmail] --> API[Argus API]
 
-Client --> API[Argus API]
+API --> Orchestrator[Detection Engine]
+
+Orchestrator --> ML[ML Model]
+Orchestrator --> Rules[Rule Engine]
+Orchestrator --> Intel[Threat Intel]
 
 API --> Queue[Redis Queue]
 
-Queue --> SandboxWorker[Sandbox Worker]
-Queue --> ScannerWorker[Security Scanner Worker]
-Queue --> ThreatWorker[Threat Intel Worker]
+Queue --> Sandbox[Sandbox Worker]
+Queue --> Scanner[Security Worker]
 
-SandboxWorker --> DB[(PostgreSQL)]
-ScannerWorker --> DB
-ThreatWorker --> DB
+Sandbox --> DB[(PostgreSQL)]
+Scanner --> DB
 
-API --> Metrics[Prometheus Metrics]
-
-Metrics --> Grafana[Grafana Dashboard]
+API --> Metrics[Prometheus]
+Metrics --> Grafana[Grafana]
 ```
 
 ---
 
-# Project Structure
+## Tech Stack
+
+### Backend
+
+![FastAPI](https://img.shields.io/badge/FastAPI-Backend-green?logo=fastapi)
+![SQLAlchemy](https://img.shields.io/badge/ORM-SQLAlchemy-orange)
+![Redis](https://img.shields.io/badge/Queue-Redis-red)
+
+### ML & Analysis
+
+![XGBoost](https://img.shields.io/badge/ML-XGBoost-blue)
+![Playwright](https://img.shields.io/badge/Sandbox-Playwright-black)
+![Chromium](https://img.shields.io/badge/Browser-Chromium-lightgrey)
+
+### Infrastructure
+
+![Docker](https://img.shields.io/badge/Docker-Container-blue)
+![Kubernetes](https://img.shields.io/badge/Kubernetes-Orchestration-blue)
+![Prometheus](https://img.shields.io/badge/Monitoring-Prometheus-orange)
+![Grafana](https://img.shields.io/badge/Visualization-Grafana-yellow)
+
+---
+
+## Detection Pipeline
+
+```mermaid
+flowchart LR
+A[Incoming URL]
+--> B[URL Analysis]
+--> C[HTML Inspection]
+--> D[Sandbox Execution]
+--> E[Threat Intelligence]
+--> F[Hybrid Risk Score]
+```
+
+---
+
+## Project Structure
 
 ```
 backend/
   app/
-    main.py
-    model.py
+    detection/
+    ml/
     services/
-    sandbox/
     workers/
-    security_scanner/
 
 frontend/
   src/
+
+extension/
+  chrome-extension/
 
 cli/
   scanphish.py
@@ -190,160 +189,107 @@ deploy/
 monitoring/
   prometheus.yml
   grafana_dashboard.json
-
-scripts/
-  dev_up.sh
-  k8s_deploy.sh
-  k8s_delete.sh
-
-docs/
-  DEPLOYMENT.md
 ```
 
 ---
 
-# Local Development
+## Local Development
 
-Requirements
+### Requirements
 
-Python 3.11
-Docker
-Docker Compose
+* Python 3.11
+* Docker
+* Node.js
 
-Run the platform locally:
+### Run Locally
 
 ```bash
 ./scripts/dev_up.sh
 ```
 
-Services will start automatically.
+Access:
 
-API
-http://localhost:8000
-
-Grafana
-http://localhost:3000
-
-Prometheus
-http://localhost:9090
-
-Sandbox artifacts are stored locally in:
-
-```
-sandbox_artifacts/
-```
+* API → http://localhost:8000
+* Grafana → http://localhost:3000
+* Prometheus → http://localhost:9090
 
 ---
 
-# Kubernetes Deployment
-
-The platform includes Kubernetes manifests for scalable deployment.
-
-Deploy:
+## Kubernetes Deployment
 
 ```bash
 ./scripts/k8s_deploy.sh
 ```
 
-This creates:
+Includes:
 
-* Argus API deployment
-* worker deployments
+* API services
+* Workers
 * Redis
 * PostgreSQL
-* Prometheus monitoring
-* Grafana dashboards
-* persistent artifact storage
-
-Remove deployment:
-
-```bash
-./scripts/k8s_delete.sh
-```
-
-Deployment details:
-
-```
-docs/DEPLOYMENT.md
-```
+* Monitoring stack
 
 ---
 
-# CLI Scanner
-
-Argus includes a CLI phishing detection tool.
-
-Example:
+## CLI Scanner
 
 ```bash
 python cli/scanphish.py https://example.com
 ```
 
-The CLI returns:
+Returns:
 
 * phishing verdict
 * risk score
-* domain intelligence signals
 * detection explanation
-
-The CLI can also be integrated into CI pipelines.
+* intelligence signals
 
 ---
 
-# Observability
+## Observability
 
-Argus exposes operational metrics at:
+Metrics endpoint:
 
 ```
 /metrics
 ```
 
-Metrics include:
+Tracked metrics:
 
-* scan request counts
-* phishing detection totals
-* worker health metrics
-* sandbox execution statistics
-* model inference latency
-
-Prometheus collects metrics and Grafana visualizes the system health.
-
-Alert rules monitor:
-
-* worker failures
-* queue backlog
-* model latency spikes
-* phishing detection anomalies
+* request throughput
+* detection rates
+* worker health
+* model latency
 
 ---
 
-# Security Design
+## Security Model
 
-Argus follows security-first engineering practices.
-
-Key protections include:
-
-* non-root container execution
-* strict tenant isolation
-* sandbox isolation for untrusted pages
-* structured security event logging
-* worker health monitoring
-* rate limiting and API authentication
+* tenant isolation
+* sandbox isolation
+* non-root containers
+* structured logging
+* rate limiting
+* authentication
 
 ---
 
-# Roadmap
+## Roadmap
 
-Future improvements include:
-
-* automated ML training pipeline
-* analyst feedback labeling
-* enterprise alerting integrations
-* SIEM export support
-* advanced visual impersonation detection
+* advanced ML model tuning
+* enterprise SSO
+* SIEM integrations
+* alerting pipelines
+* extended threat feeds
 
 ---
 
-# License
+## License
 
-This project is intended for research and educational purposes. Licensing terms may be defined in the future depending on distribution and use.
+Research and educational use. Licensing may evolve for production deployment.
+
+---
+
+<p align="center">
+  <img src="https://img.shields.io/badge/Argus-Building%20Adaptive%20Security-0A192F?style=for-the-badge&logo=shield&logoColor=white" />
+</p>
