@@ -213,8 +213,68 @@ class TenantDomainWatch(Base):
 
 class AlertStatus(str, enum.Enum):
     open = "open"
+    acknowledged = "acknowledged"
     ignored = "ignored"
     resolved = "resolved"
+
+
+class SecurityAlertType(str, enum.Enum):
+    PHISHING_DETECTED = "PHISHING_DETECTED"
+    DOMAIN_IMPERSONATION = "DOMAIN_IMPERSONATION"
+    SANDBOX_HIGH_RISK = "SANDBOX_HIGH_RISK"
+    THREAT_FEED_MATCH = "THREAT_FEED_MATCH"
+    CRITICAL_SECURITY_ISSUE = "CRITICAL_SECURITY_ISSUE"
+
+
+class AlertSeverity(str, enum.Enum):
+    critical = "critical"
+    high = "high"
+    medium = "medium"
+    low = "low"
+
+
+class SecurityAlert(Base):
+    __tablename__ = "security_alerts"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True)
+
+    alert_type: Mapped[SecurityAlertType] = mapped_column(Enum(SecurityAlertType), nullable=False)
+    severity: Mapped[AlertSeverity] = mapped_column(Enum(AlertSeverity), nullable=False)
+
+    url: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    domain: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+
+    scan_id: Mapped[Optional[int]] = mapped_column(ForeignKey("scans.id", ondelete="SET NULL"), nullable=True)
+    sandbox_run_id: Mapped[Optional[int]] = mapped_column(ForeignKey("sandbox_runs.id", ondelete="SET NULL"), nullable=True)
+    security_scan_run_id: Mapped[Optional[int]] = mapped_column(ForeignKey("security_scan_runs.id", ondelete="SET NULL"), nullable=True)
+
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    status: Mapped[AlertStatus] = mapped_column(Enum(AlertStatus), default=AlertStatus.open, nullable=False)
+
+    tenant: Mapped["Tenant"] = relationship("Tenant")
+
+
+class NotificationChannelType(str, enum.Enum):
+    slack = "slack"
+    webhook = "webhook"
+    email = "email"
+
+
+class NotificationChannel(Base):
+    __tablename__ = "notification_channels"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True)
+
+    type: Mapped[NotificationChannelType] = mapped_column(Enum(NotificationChannelType), nullable=False)
+    config: Mapped[Dict[str, Any]] = mapped_column(JSON, default=dict)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+
+    tenant: Mapped["Tenant"] = relationship("Tenant")
+
 
 
 class DomainImpersonationAlert(Base):

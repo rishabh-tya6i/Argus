@@ -20,10 +20,11 @@ from typing import Iterable, List, Optional
 from sqlalchemy.orm import Session
 
 from backend.app.db import SessionLocal, init_db
-from backend.app.db_models import DomainReputation, ThreatFeedEntry, TenantDomainWatch, DomainImpersonationAlert, AlertStatus
-from backend.app.services.domain_intel import detect_typosquatting, detect_homograph, get_domain_enrichment, normalize_domain
 from backend.app.services.notifications import dispatch_impersonation_alerts
 from backend.app.services.scans import trigger_auto_scan
+from backend.app.services.alert_service import create_security_alert
+from backend.app.services.domain_intel import detect_typosquatting, detect_homograph, get_domain_enrichment, normalize_domain
+from backend.app.db_models import DomainReputation, ThreatFeedEntry, TenantDomainWatch, DomainImpersonationAlert, AlertStatus, SecurityAlertType, AlertSeverity
 from backend.app.observability import (
     tracer,
     set_correlation_ctx,
@@ -98,6 +99,21 @@ def upsert_threat_entry(db: Session, record: ThreatFeedRecord) -> None:
     db.add(repo)
 
 
+    repo.last_seen_at = datetime.utcnow()
+    db.add(repo)
+    
+    # Check if this domain matches any tenant watches to trigger THREAT_FEED_MATCH alert
+    watches = db.query(TenantDomainWatch).filter(TenantDomainWatch.domain == record.domain).all()
+    for watch in watches:
+        create_security_alert(
+            db=db,
+            tenant_id=watch.tenant_id,
+            alert_type=SecurityAlertType.THREAT_FEED_MATCH,
+            severity=AlertSeverity.high,
+            domain=record.domain,
+        )
+
+
 def process_threat_alert(
     db: Session, watch: TenantDomainWatch, suspicious_domain: str, detection_type: str, base_score: float
 ) -> Optional[DomainImpersonationAlert]:
@@ -137,6 +153,15 @@ def process_threat_alert(
     db.add(alert)
     db.commit()
     db.refresh(alert)
+
+    # Trigger security alert for impersonation
+    create_security_alert(
+        db=db,
+        tenant_id=watch.tenant_id,
+        alert_type=SecurityAlertType.DOMAIN_IMPERSONATION,
+        severity=AlertSeverity.critical if final_score > 0.8 else AlertSeverity.high,
+        domain=suspicious_domain,
+    )
 
     # Emit metric for generated threat alert
     THREAT_INTEL_ALERTS_TOTAL.labels(detection_type=detection_type).inc()

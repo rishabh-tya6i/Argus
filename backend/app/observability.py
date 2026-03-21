@@ -227,6 +227,27 @@ try:
         ["detection_type"],
     )
 
+    ALERTS_GENERATED_TOTAL = Counter(
+        "alerts_generated_total",
+        "Total security alerts generated",
+        ["alert_type", "severity"],
+    )
+    ALERTS_SENT_TOTAL = Counter(
+        "alerts_sent_total",
+        "Total security alerts sent to notification channels",
+        ["type"],
+    )
+    ALERTS_FAILED_TOTAL = Counter(
+        "alerts_failed_total",
+        "Total security alert notification failures",
+        ["type"],
+    )
+    ALERTS_BY_SEVERITY = Gauge(
+        "alerts_by_severity",
+        "Current number of open alerts by severity level",
+        ["severity"],
+    )
+
     # -- Model inference --
     MODEL_INFERENCE_LATENCY = Histogram(
         "model_inference_latency_seconds",
@@ -310,6 +331,10 @@ except ImportError:  # pragma: no cover
     QUEUE_JOBS_TOTAL = _stub
     WORKER_HEARTBEAT = _stub
     WORKER_FAILURES_TOTAL = _stub
+    ALERTS_GENERATED_TOTAL = _stub
+    ALERTS_SENT_TOTAL = _stub
+    ALERTS_FAILED_TOTAL = _stub
+    ALERTS_BY_SEVERITY = _stub
 
 
 def update_worker_heartbeat(worker: str) -> None:
