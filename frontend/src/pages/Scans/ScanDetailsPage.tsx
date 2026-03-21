@@ -5,6 +5,7 @@ import { ChevronLeft, ExternalLink, ShieldAlert, Monitor, Globe } from 'lucide-r
 import { scansApi } from '../../api/scans';
 import { RiskScoreIndicator } from '../../components/investigation/RiskScoreIndicator';
 import { ExplanationReasonPanel } from '../../components/investigation/ExplanationReasonPanel';
+import { AnalystFeedbackPanel } from '../../components/ScanFeedback/AnalystFeedbackPanel';
 
 export const ScanDetailsPage = () => {
   const { id } = useParams<{ id: string }>();
@@ -75,6 +76,8 @@ export const ScanDetailsPage = () => {
               </div>
             </div>
           </div>
+
+          <AnalystFeedbackPanel scanId={scan.id} />
 
           <div className="card bg-base-100 border border-base-300 shadow-sm border-l-4 border-l-info">
             <div className="card-body p-6">

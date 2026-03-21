@@ -16,6 +16,7 @@ from .db_models import (
     AlertSeverity,
     NotificationChannelType,
     CaseStatus,
+    FeedbackLabel,
 )
 
 
@@ -338,3 +339,51 @@ class CaseStatusUpdateRequest(BaseModel):
 
 class CaseAssignRequest(BaseModel):
     user_id: Optional[int]
+
+
+class ScanFeedbackResponse(BaseModel):
+    id: int
+    scan_id: int
+    tenant_id: int
+    analyst_user_id: int
+    label: FeedbackLabel
+    notes: Optional[str]
+    created_at: datetime
+    analyst: Optional[UserResponse] = None
+
+    class Config:
+        from_attributes = True
+
+
+class ScanFeedbackCreateRequest(BaseModel):
+    scan_id: int
+    label: FeedbackLabel
+    notes: Optional[str] = None
+
+
+class ScanFeedbackAggregatedResponse(BaseModel):
+    scan_id: int
+    majority_label: FeedbackLabel
+    feedback_count: int
+    confidence: float
+
+
+class ModelVersionResponse(BaseModel):
+    id: int
+    model_name: str
+    version: str
+    accuracy: float
+    precision: float
+    recall: float
+    f1_score: float
+    created_at: datetime
+    artifact_location: str
+    is_active: bool
+    metadata_json: Dict[str, Any]
+
+    class Config:
+        from_attributes = True
+
+
+class ModelActivateRequest(BaseModel):
+    is_active: bool

@@ -122,6 +122,27 @@ def run_security_scan(api_base: str, target_url: str, api_key: Optional[str] = N
     )
 
 
+def submit_feedback(api_base: str, scan_id: int, label: str, notes: Optional[str] = None, api_key: Optional[str] = None) -> None:
+    endpoint = api_base.rstrip("/") + "/feedback"
+    headers: Dict[str, str] = {}
+    if api_key:
+        headers["Authorization"] = f"Bearer {api_key}"
+
+    payload = {
+        "scan_id": scan_id,
+        "label": label,
+        "notes": notes
+    }
+
+    try:
+        _post_json(endpoint, payload, headers=headers)
+    except HTTPError as e:
+        msg = e.read().decode("utf-8", errors="ignore")
+        raise SystemExit(f"[scanphish feedback] API error {e.code}: {msg}")
+    except URLError as e:
+        raise SystemExit(f"[scanphish feedback] Failed to reach API at {endpoint}: {e.reason}")
+
+
 def print_human_readable(result: ScanResult) -> None:
     print(f"URL          : {result.url}")
     print(f"Verdict      : {result.prediction.upper()}  (confidence={result.confidence:.3f})")
@@ -217,6 +238,14 @@ def main(argv: Optional[List[str]] = None) -> int:
             "Use 'never' to always exit 0 (useful for local exploration)."
         ),
     )
+    parser.add_argument(
+        "--feedback",
+        action="store_true",
+        help="Submit analyst feedback for a specific scan ID.",
+    )
+    parser.add_argument("--scan-id", type=int, help="Scan ID for feedback submission.")
+    parser.add_argument("--label", choices=["safe", "suspicious", "phishing"], help="Feedback label.")
+    parser.add_argument("--notes", help="Optional notes for feedback.")
 
     args = parser.parse_args(argv)
 
@@ -239,6 +268,13 @@ def main(argv: Optional[List[str]] = None) -> int:
         except ImportError as e:
             print(f"[-] Could not import worker modules. Ensure you're running from the project root: {e}")
             return 1
+
+    if args.feedback:
+        if not args.scan_id or not args.label:
+            parser.error("--scan-id and --label are required for feedback submission")
+        submit_feedback(args.api_base, args.scan_id, args.label, args.notes, args.api_key)
+        print(f"[OK] Feedback successfully submitted for scan #{args.scan_id}")
+        return 0
 
     if not args.url:
         parser.error("url is required for scanning commands")

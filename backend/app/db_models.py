@@ -17,6 +17,8 @@ from sqlalchemy import (
     String,
     Text,
     Float,
+    UniqueConstraint,
+    Index,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from pgvector.sqlalchemy import Vector
@@ -480,4 +482,63 @@ class CaseComment(Base):
 
     case: Mapped["InvestigationCase"] = relationship("InvestigationCase", back_populates="comments")
     user: Mapped["User"] = relationship("User")
+
+
+class FeedbackLabel(str, enum.Enum):
+    safe = "safe"
+    suspicious = "suspicious"
+    phishing = "phishing"
+
+
+class ScanFeedback(Base):
+    __tablename__ = "scan_feedback"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    scan_id: Mapped[int] = mapped_column(ForeignKey("scans.id", ondelete="CASCADE"), nullable=False, index=True)
+    tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True)
+    analyst_user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    
+    label: Mapped[FeedbackLabel] = mapped_column(Enum(FeedbackLabel), nullable=False)
+    notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+
+    scan: Mapped["Scan"] = relationship("Scan")
+    tenant: Mapped["Tenant"] = relationship("Tenant")
+    analyst: Mapped["User"] = relationship("User")
+
+    __table_args__ = (
+        UniqueConstraint("scan_id", "analyst_user_id", name="uq_scan_feedback_scan_analyst"),
+        Index("idx_scan_feedback_tenant_scan", "tenant_id", "scan_id"),
+    )
+
+
+class ModelVersion(Base):
+    __tablename__ = "model_versions"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    model_name: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    version: Mapped[str] = mapped_column(String(64), nullable=False)
+    
+    accuracy: Mapped[float] = mapped_column(Float, nullable=False)
+    precision: Mapped[float] = mapped_column(Float, nullable=False)
+    recall: Mapped[float] = mapped_column(Float, nullable=False)
+    f1_score: Mapped[float] = mapped_column(Float, nullable=False)
+    
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    artifact_location: Mapped[str] = mapped_column(String(512), nullable=False)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False, index=True)
+
+    metadata_json: Mapped[Dict[str, Any]] = mapped_column(JSON, default=dict)
+
+
+class ScanFeatures(Base):
+    __tablename__ = "scan_features"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    scan_id: Mapped[int] = mapped_column(ForeignKey("scans.id", ondelete="CASCADE"), nullable=False, unique=True)
+    
+    features_json: Mapped[Dict[str, Any]] = mapped_column(JSON, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+
+    scan: Mapped["Scan"] = relationship("Scan")
 
