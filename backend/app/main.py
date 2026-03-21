@@ -26,6 +26,7 @@ from .routers_notification_channels import router as notification_channels_route
 from .routers_feedback import router as feedback_router
 from .routers_models import router as models_router
 from .routers_prediction import router as prediction_router
+from .routers_detection import router as detection_router
 from .sandbox.queue import enqueue_sandbox_run
 from .observability import (
     setup_tracing,
@@ -112,6 +113,7 @@ app.include_router(notification_channels_router)
 app.include_router(feedback_router)
 app.include_router(models_router)
 app.include_router(prediction_router)
+app.include_router(detection_router)
 
 
 @app.get("/health", tags=["ops"])
