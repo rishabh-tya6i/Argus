@@ -298,9 +298,9 @@ body {
 
 .item-title {
     font-weight: 600;
-    font-size: 14px;
+    font-size: 13px;
     word-break: break-all;
-    font-family: monospace;
+    font-family: 'JetBrains Mono', 'Fira Code', monospace;
 }
 
 .item-tags {
@@ -350,6 +350,101 @@ body {
 .header-value {
     color: var(--text-muted);
     font-family: monospace;
-    font-size: 12px;
+    font-size: 11px;
     word-break: break-all;
+}
+
+/* New Component Styles */
+.explanation-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.explanation-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 13px;
+    padding: 8px 12px;
+    background: rgba(255, 255, 255, 0.03);
+    border-radius: 6px;
+}
+
+.intel-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16px;
+}
+
+.intel-item {
+    text-align: center;
+    padding: 12px;
+    background: rgba(255, 255, 255, 0.03);
+    border-radius: 8px;
+}
+
+.intel-label {
+    font-size: 11px;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    margin-bottom: 4px;
+}
+
+.intel-value {
+    font-weight: 600;
+    font-size: 14px;
+}
+
+.security-sections h4 {
+    font-size: 14px;
+    font-weight: 600;
+    margin-bottom: 16px;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.sandbox-run-card {
+    background: var(--bg-surface);
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    padding: 20px;
+    margin-bottom: 20px;
+}
+
+.sandbox-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+}
+
+.event-timeline {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    max-height: 400px;
+    overflow-y: auto;
+    padding-right: 10px;
+}
+
+.event-item {
+    display: flex;
+    gap: 12px;
+    padding: 10px;
+    background: rgba(255, 255, 255, 0.02);
+    border-radius: 6px;
+    font-size: 12px;
+}
+
+.event-time {
+    color: var(--text-muted);
+    font-family: monospace;
+    min-width: 80px;
+}
+
+.event-type {
+    font-weight: 600;
+    color: var(--primary-color);
 }

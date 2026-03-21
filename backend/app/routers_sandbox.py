@@ -44,14 +44,15 @@ def start_sandbox_run(
 
 
 @router.get("/runs", response_model=List[SandboxRunResponse])
-def list_sandbox_runs(tenant: CurrentTenant, db: Session = Depends(get_db)):
-    runs = (
+def list_sandbox_runs(tenant: CurrentTenant, url: str | None = None, db: Session = Depends(get_db)):
+    query = (
         db.query(SandboxRun)
         .filter(SandboxRun.tenant_id == tenant.id)
-        .order_by(SandboxRun.id.desc())
-        .limit(100)
-        .all()
     )
+    if url:
+        query = query.filter(SandboxRun.url == url)
+    
+    runs = query.order_by(SandboxRun.id.desc()).limit(100).all()
     return runs
 
 
