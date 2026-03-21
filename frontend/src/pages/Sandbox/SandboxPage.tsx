@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Box, Play, AlertCircle } from 'lucide-react';
 import { sandboxApi } from '../../api/sandbox';
 import { SandboxTimeline } from '../../components/investigation/SandboxTimeline';
@@ -8,6 +8,26 @@ import { NetworkVisualization } from '../../components/investigation/NetworkVisu
 export const SandboxPage = () => {
   const [activeTab, setActiveTab] = useState<'runs' | 'analysis'>('runs');
   const [selectedRunId, setSelectedRunId] = useState<number | null>(null);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [newRunUrl, setNewRunUrl] = useState('');
+
+  const queryClient = useQueryClient();
+
+  const createRunMutation = useMutation({
+    mutationFn: (url: string) => sandboxApi.createRun(url),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['sandboxRuns'] });
+      setIsModalOpen(false);
+      setNewRunUrl('');
+    }
+  });
+
+  const handleCreateRun = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (newRunUrl.trim()) {
+      createRunMutation.mutate(newRunUrl.trim());
+    }
+  };
 
   const { data: runs = [], isLoading } = useQuery({
     queryKey: ['sandboxRuns'],
@@ -34,7 +54,7 @@ export const SandboxPage = () => {
           </h1>
           <p className="text-base-content/70">Isolated browser execution and dynamic analysis results.</p>
         </div>
-        <button className="btn btn-primary gap-2">
+        <button className="btn btn-primary gap-2" onClick={() => setIsModalOpen(true)}>
           <Play className="w-4 h-4" /> New Sandbox Run
         </button>
       </div>
@@ -130,6 +150,45 @@ export const SandboxPage = () => {
               </div>
             </div>
           )}
+        </div>
+      )}
+
+      {/* New Sandbox Run Modal */}
+      {isModalOpen && (
+        <div className="modal modal-open">
+          <div className="modal-box relative bg-base-100">
+            <button 
+              className="btn btn-sm btn-circle absolute right-2 top-2"
+              onClick={() => setIsModalOpen(false)}
+            >✕</button>
+            <h3 className="text-lg font-bold mb-4">Start New Sandbox Run</h3>
+            <form onSubmit={handleCreateRun}>
+              <div className="form-control w-full">
+                <label className="label">
+                  <span className="label-text">Target URL</span>
+                </label>
+                <input 
+                  type="url" 
+                  placeholder="https://example.com" 
+                  className="input input-bordered w-full" 
+                  value={newRunUrl}
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNewRunUrl(e.target.value)}
+                  required
+                />
+              </div>
+              <div className="modal-action">
+                <button type="button" className="btn" onClick={() => setIsModalOpen(false)}>Cancel</button>
+                <button 
+                  type="submit" 
+                  className="btn btn-primary"
+                  disabled={createRunMutation.isPending || !newRunUrl.trim()}
+                >
+                  {createRunMutation.isPending ? <span className="loading loading-spinner"></span> : 'Run Sandbox'}
+                </button>
+              </div>
+            </form>
+          </div>
+          <div className="modal-backdrop" onClick={() => setIsModalOpen(false)}></div>
         </div>
       )}
     </div>

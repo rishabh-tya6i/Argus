@@ -101,7 +101,7 @@ services:
   # PostgreSQL 15
   # ─────────────────────────────────────────────
   postgres:
-    image: postgres:15-alpine
+    image: pgvector/pgvector:pg15
     container_name: argus-postgres
     environment:
       POSTGRES_DB: argus
@@ -178,6 +178,27 @@ services:
       - "3000:3000"
     depends_on:
       - prometheus
+    restart: unless-stopped
+    networks:
+      - argus-net
+
+  # ─────────────────────────────────────────────
+  # React Frontend (Vite)
+  # ─────────────────────────────────────────────
+  argus-frontend:
+    build:
+      context: ./frontend
+    image: argus-frontend:latest
+    container_name: argus-frontend
+    ports:
+      - "5173:5173"
+    environment:
+      VITE_API_BASE_URL: http://localhost:8000
+    depends_on:
+      - argus-api
+    volumes:
+      - ./frontend/src:/app/src
+      - ./frontend/public:/app/public
     restart: unless-stopped
     networks:
       - argus-net

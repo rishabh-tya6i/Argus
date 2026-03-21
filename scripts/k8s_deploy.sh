@@ -41,8 +41,9 @@ echo "⟳  Applying infrastructure (postgres, redis, prometheus, grafana)..."
 kubectl apply -f "$MANIFEST_DIR/infrastructure.yaml"
 
 # 6. Application deployments
-echo "⟳  Applying application deployments..."
+echo "⟳  Applying application deployments (api, workers, frontend)..."
 kubectl apply -f "$MANIFEST_DIR/deployments.yaml"
+kubectl apply -f "$MANIFEST_DIR/frontend.yaml"
 
 # 7. Services
 echo "⟳  Applying services..."

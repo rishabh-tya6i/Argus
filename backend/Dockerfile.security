@@ -1,41 +1,41 @@
 # ============================================================
 # Argus Security Scanner Worker – Dockerfile.security
 # ============================================================
-FROM python:3.11-slim AS builder
-
-WORKDIR /build
-
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    build-essential gcc libpq-dev \
-    && rm -rf /var/lib/apt/lists/*
-
-COPY requirements.txt .
-RUN pip install --upgrade pip \
-    && pip install --no-cache-dir --prefix=/install -r requirements.txt
-
-# ============================================================
-FROM python:3.11-slim AS runtime
+FROM mcr.microsoft.com/playwright/python:v1.47.0-jammy AS runtime
 
 LABEL maintainer="Argus Team" \
       org.opencontainers.image.title="argus-security-worker" \
       org.opencontainers.image.description="Argus Security Scanner Worker"
 
-WORKDIR /app
+# Use root for setup
+USER root
+
+WORKDIR /src
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    libpq5 curl nmap \
+    libpq5 curl nmap build-essential gcc libpq-dev \
     && rm -rf /var/lib/apt/lists/*
 
-COPY --from=builder /install /usr/local
-COPY . /app
+COPY requirements.txt .
+RUN pip install --upgrade pip \
+    && pip install --no-cache-dir -r requirements.txt
 
-RUN addgroup --system argus && adduser --system --ingroup argus argus \
-    && chown -R argus:argus /app
+COPY . /src/backend
+
+# Create non-root user and ensure they have a home directory
+RUN addgroup --system argus && adduser --system --ingroup argus --home /home/argus argus \
+    && mkdir -p /home/argus/.cache \
+    && chown -R argus:argus /src /home/argus
 
 USER argus
 
+WORKDIR /src/backend
+
 ENV PYTHONUNBUFFERED=1 \
-    PYTHONDONTWRITEBYTECODE=1
+    PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONPATH=/src \
+    HOME=/home/argus \
+    HF_HOME=/home/argus/.cache/huggingface
 
 HEALTHCHECK --interval=60s --timeout=15s --start-period=30s --retries=3 \
     CMD python -c "import redis, os; r=redis.from_url(os.getenv('REDIS_URL','redis://redis:6379')); r.ping()" || exit 1

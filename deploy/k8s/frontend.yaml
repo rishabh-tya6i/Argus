@@ -1,0 +1,55 @@
+# ============================================================
+# argus-frontend Deployment
+# ============================================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: argus-frontend
+  namespace: argus
+  labels:
+    app: argus-frontend
+    app.kubernetes.io/component: ui
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: argus-frontend
+  template:
+    metadata:
+      labels:
+        app: argus-frontend
+    spec:
+      containers:
+        - name: argus-frontend
+          image: argus-frontend:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 5173
+          env:
+            - name: VITE_API_BASE_URL
+              value: "http://argus-api-service"
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 200m
+              memory: 256Mi
+---
+# ============================================================
+# argus-frontend Service (NodePort for dev clusters)
+# ============================================================
+apiVersion: v1
+kind: Service
+metadata:
+  name: argus-frontend-service
+  namespace: argus
+  labels:
+    app: argus-frontend
+spec:
+  type: LoadBalancer
+  selector:
+    app: argus-frontend
+  ports:
+    - port: 80
+      targetPort: 5173
