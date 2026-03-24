@@ -9,6 +9,7 @@
  *     apiBase: "https://api.example.com/api",
  *     apiKey: "tenant-api-key",
  *   });
+ * TODO ENHANCE SDK REFERING ATL-12923
  */
 
 const DEFAULT_API_BASE = "http://localhost:8000/api";
