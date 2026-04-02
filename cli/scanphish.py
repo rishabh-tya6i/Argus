@@ -1,19 +1,6 @@
 #!/usr/bin/env python3
 """
-scanphish - Developer CLI for phishing risk scans.
-
-This tool sends URLs to the backend phishing detection API and prints a
-developer-focused summary, including model confidence and heuristic
-explanations (hidden forms, obfuscated JS, redirects, etc.).
-
-Intended usage:
-
-    scanphish https://example.com
-    scanphish https://example.com --api-base http://localhost:8000/api
-
-The CLI is designed to integrate easily into CI pipelines by returning a
-non-zero exit code when high-risk phishing is detected (configurable via
---fail-on).
+scanphish - Developer CLI for phishing risk scans (fancy edition)
 """
 
 from __future__ import annotations
@@ -27,10 +14,16 @@ from typing import Any, Dict, List, Optional
 from urllib import request as urlrequest
 from urllib.error import URLError, HTTPError
 
+from colorama import Fore, Style, init
+
+init(autoreset=True)
 
 DEFAULT_API_BASE = "http://localhost:8000/api"
 
 
+# =========================
+# Data Models
+# =========================
 @dataclass
 class ScanResult:
     url: str
@@ -48,6 +41,26 @@ class SecurityScanResult:
     issues: List[Dict[str, Any]]
 
 
+# =========================
+# Helpers
+# =========================
+def _color_verdict(prediction: str) -> str:
+    if prediction == "phishing":
+        return Fore.RED + prediction.upper()
+    elif prediction == "suspicious":
+        return Fore.YELLOW + prediction.upper()
+    return Fore.GREEN + prediction.upper()
+
+
+def _spinner():
+    while True:
+        for c in "|/-\\":
+            yield c
+
+
+# =========================
+# HTTP
+# =========================
 def _post_json(url: str, payload: Dict[str, Any], headers: Optional[Dict[str, str]] = None) -> Dict[str, Any]:
     data = json.dumps(payload).encode("utf-8")
     req = urlrequest.Request(url, data=data, headers={"Content-Type": "application/json", **(headers or {})})
@@ -63,19 +76,19 @@ def _get_json(url: str, headers: Optional[Dict[str, str]] = None) -> Dict[str, A
     return json.loads(body.decode("utf-8"))
 
 
+# =========================
+# Core Logic
+# =========================
 def run_scan(api_base: str, target_url: str, api_key: Optional[str] = None) -> ScanResult:
     endpoint = api_base.rstrip("/") + "/predict"
-    headers: Dict[str, str] = {}
-    if api_key:
-        headers["Authorization"] = f"Bearer {api_key}"
+    headers = {"Authorization": f"Bearer {api_key}"} if api_key else {}
 
     try:
         resp = _post_json(endpoint, {"url": target_url}, headers=headers)
     except HTTPError as e:
-        msg = e.read().decode("utf-8", errors="ignore")
-        raise SystemExit(f"[scanphish] API error {e.code}: {msg}")
+        raise SystemExit(Fore.RED + f"[API ERROR {e.code}] {e.read().decode()}")
     except URLError as e:
-        raise SystemExit(f"[scanphish] Failed to reach API at {endpoint}: {e.reason}")
+        raise SystemExit(Fore.RED + f"[NETWORK ERROR] {e.reason}")
 
     return ScanResult(
         url=target_url,
@@ -87,31 +100,34 @@ def run_scan(api_base: str, target_url: str, api_key: Optional[str] = None) -> S
 
 def run_security_scan(api_base: str, target_url: str, api_key: Optional[str] = None) -> SecurityScanResult:
     endpoint = api_base.rstrip("/") + "/security-scans"
-    headers: Dict[str, str] = {}
-    if api_key:
-        headers["Authorization"] = f"Bearer {api_key}"
+    headers = {"Authorization": f"Bearer {api_key}"} if api_key else {}
 
     try:
-        # 1. Enqueue
         resp = _post_json(endpoint, {"url": target_url}, headers=headers)
         scan_id = resp["id"]
-        print(f"[*] Security scan queued with ID: {scan_id}")
 
-        # 2. Poll
+        print(Fore.CYAN + f"\n🔍 Scan queued (ID: {scan_id})")
+
         poll_endpoint = f"{endpoint}/{scan_id}"
+        spin = _spinner()
+
         while True:
             resp = _get_json(poll_endpoint, headers=headers)
             status = resp.get("status")
+
             if status in ("completed", "failed"):
                 break
-            time.sleep(2)
-            print(".", end="", flush=True)
-        print()
+
+            sys.stdout.write(Fore.CYAN + f"\rScanning... {next(spin)}")
+            sys.stdout.flush()
+            time.sleep(1.5)
+
+        print("\r" + " " * 30, end="\r")  # clear line
+
     except HTTPError as e:
-        msg = e.read().decode("utf-8", errors="ignore")
-        raise SystemExit(f"[scanphish security] API error {e.code}: {msg}")
+        raise SystemExit(Fore.RED + f"[API ERROR {e.code}] {e.read().decode()}")
     except URLError as e:
-        raise SystemExit(f"[scanphish security] Failed to reach API at {endpoint}: {e.reason}")
+        raise SystemExit(Fore.RED + f"[NETWORK ERROR] {e.reason}")
 
     return SecurityScanResult(
         url=target_url,
@@ -122,183 +138,92 @@ def run_security_scan(api_base: str, target_url: str, api_key: Optional[str] = N
     )
 
 
-def submit_feedback(api_base: str, scan_id: int, label: str, notes: Optional[str] = None, api_key: Optional[str] = None) -> None:
-    endpoint = api_base.rstrip("/") + "/feedback"
-    headers: Dict[str, str] = {}
-    if api_key:
-        headers["Authorization"] = f"Bearer {api_key}"
-
-    payload = {
-        "scan_id": scan_id,
-        "label": label,
-        "notes": notes
-    }
-
-    try:
-        _post_json(endpoint, payload, headers=headers)
-    except HTTPError as e:
-        msg = e.read().decode("utf-8", errors="ignore")
-        raise SystemExit(f"[scanphish feedback] API error {e.code}: {msg}")
-    except URLError as e:
-        raise SystemExit(f"[scanphish feedback] Failed to reach API at {endpoint}: {e.reason}")
-
-
+# =========================
+# Pretty Printers
+# =========================
 def print_human_readable(result: ScanResult) -> None:
-    print(f"URL          : {result.url}")
-    print(f"Verdict      : {result.prediction.upper()}  (confidence={result.confidence:.3f})")
+    print(Fore.CYAN + "\n=== 🔎 Phishing Scan Result ===\n")
+
+    print(f"{Style.DIM}URL{Style.RESET_ALL}        : {result.url}")
+    print(f"{Style.DIM}Verdict{Style.RESET_ALL}    : {_color_verdict(result.prediction)} "
+          f"({result.confidence:.3f})")
 
     model_scores = result.explanation.get("model_scores") or {}
-    print("Model scores : ", end="")
-    parts = []
-    for name in ("url_model", "html_model", "visual_model", "classical_model"):
-        if name in model_scores:
-            parts.append(f"{name}={model_scores[name]:.3f}")
-    print(", ".join(parts) if parts else "n/a")
+    if model_scores:
+        print(f"\n{Fore.MAGENTA}Model Scores:")
+        for k, v in model_scores.items():
+            print(f"  • {k:<18} {v:.3f}")
 
     important = result.explanation.get("important_features") or []
     if important:
-        print("\nKey signals  :")
+        print(f"\n{Fore.YELLOW}⚡ Key Signals:")
         for item in important:
-            print(f"  - {item}")
+            print(f"  → {item}")
 
-    reasons: List[Dict[str, Any]] = result.explanation.get("reasons") or []
-    visual_impersonations = [r for r in reasons if r.get("code") == "BRAND_IMPERSONATION_DETECTED"]
-    other_reasons = [r for r in reasons if r.get("code") != "BRAND_IMPERSONATION_DETECTED"]
-
-    if visual_impersonations:
-        print("\n=== VISUAL BRAND IMPERSONATION WARNING ===")
-        for r in visual_impersonations:
-            msg = r.get("message", "Visual similarity detected to known brand")
-            print(f"  [ATTENTION] {msg}")
-        print("==========================================")
-
-    if other_reasons:
-        print("\nHeuristic reasons:")
-        for r in other_reasons:
-            code = r.get("code", "UNKNOWN")
-            category = r.get("category", "general")
-            weight = r.get("weight", 0.0)
-            message = r.get("message", "")
-            print(f"  [{category}/{code} | weight={weight:.2f}] {message}")
+    reasons = result.explanation.get("reasons") or []
+    if reasons:
+        print(f"\n{Fore.BLUE}🧠 Heuristics:")
+        for r in reasons:
+            print(f"  [{r.get('category')}/{r.get('code')}] {r.get('message')}")
 
 
 def print_security_readable(result: SecurityScanResult) -> None:
-    print("--- Website Security Scanner ---")
-    print(f"URL          : {result.url}")
-    print(f"Status       : {result.status.upper()}")
-    
-    if result.status == "failed":
-        print(f"Summary      : {result.summary}")
-        return
+    print(Fore.CYAN + "\n=== 🛡️ Website Security Report ===\n")
 
-    print(f"Score        : {result.score}/100")
-    print(f"Summary      : {result.summary}")
+    print(f"{Style.DIM}URL{Style.RESET_ALL}      : {result.url}")
+    print(f"{Style.DIM}Status{Style.RESET_ALL}   : {result.status.upper()}")
+
+    if result.score is not None:
+        color = Fore.GREEN if result.score >= 80 else Fore.YELLOW if result.score >= 50 else Fore.RED
+        print(f"{Style.DIM}Score{Style.RESET_ALL}    : {color}{result.score}/100")
+
+    print(f"{Style.DIM}Summary{Style.RESET_ALL}  : {result.summary}")
 
     if result.issues:
-        print("\nIdentified Issues:")
-        for item in result.issues:
-            sev = item.get("severity", "UNKNOWN")
-            cat = item.get("category", "unknown")
-            desc = item.get("description", "")
-            rem = item.get("remediation", "")
-            print(f"  [{sev}] {cat}: {desc}")
-            if rem:
-                print(f"    -> Remediation: {rem}")
+        print(f"\n{Fore.RED}⚠ Issues Found:")
+        for issue in result.issues:
+            sev = issue.get("severity", "UNKNOWN")
+            desc = issue.get("description", "")
+            print(f"  [{sev}] {desc}")
 
 
+# =========================
+# CLI Entry
+# =========================
 def main(argv: Optional[List[str]] = None) -> int:
-    parser = argparse.ArgumentParser(description="Scan a URL for phishing risk using the backend detection API.")
-    parser.add_argument("url", nargs="?", default=None, help="URL to scan, e.g. https://example.com")
-    parser.add_argument(
-        "--api-base",
-        default=DEFAULT_API_BASE,
-        help=f"Base URL for the detection API (default: {DEFAULT_API_BASE})",
-    )
-    parser.add_argument(
-        "--api-key",
-        default=None,
-        help="Optional API key or bearer token to include as Authorization header.",
-    )
-    parser.add_argument(
-        "--security",
-        action="store_true",
-        help="Run an async Website Security Scan using Playwright instead of a prediction scan.",
-    )
-    parser.add_argument(
-        "--intel",
-        action="store_true",
-        help="Run local threat intel ingestion jobs (CT and NRD feeds) for testing.",
-    )
-    parser.add_argument(
-        "--fail-on",
-        choices=["phishing", "suspicious", "never"],
-        default="phishing",
-        help=(
-            "Exit with non-zero status when the verdict is at or above this level. "
-            "Use 'never' to always exit 0 (useful for local exploration)."
-        ),
-    )
-    parser.add_argument(
-        "--feedback",
-        action="store_true",
-        help="Submit analyst feedback for a specific scan ID.",
-    )
-    parser.add_argument("--scan-id", type=int, help="Scan ID for feedback submission.")
-    parser.add_argument("--label", choices=["safe", "suspicious", "phishing"], help="Feedback label.")
-    parser.add_argument("--notes", help="Optional notes for feedback.")
+    parser = argparse.ArgumentParser(description="Scan a URL for phishing risk.")
+    parser.add_argument("url", nargs="?", help="URL to scan")
+    parser.add_argument("--api-base", default=DEFAULT_API_BASE)
+    parser.add_argument("--api-key")
+    parser.add_argument("--security", action="store_true")
+    parser.add_argument("--fail-on", choices=["phishing", "suspicious", "never"], default="phishing")
 
     args = parser.parse_args(argv)
 
-    if args.intel:
-        print("[*] Running Threat Intelligence Ingestion...")
-        try:
-            from backend.app.workers.ct_log_worker import main as ct_main
-            from backend.app.workers.nrd_worker import main as nrd_main
-            from backend.app.workers.passive_dns_worker import main as pdns_main
-            
-            print(" -> Running CT Log Monitor")
-            ct_main(run_forever=False)
-            print(" -> Running NRD Monitor")
-            nrd_main()
-            print(" -> Running Passive DNS checks")
-            pdns_main()
-            
-            print("[OK] Threat Intelligence ingestion complete.")
-            return 0
-        except ImportError as e:
-            print(f"[-] Could not import worker modules. Ensure you're running from the project root: {e}")
-            return 1
-
-    if args.feedback:
-        if not args.scan_id or not args.label:
-            parser.error("--scan-id and --label are required for feedback submission")
-        submit_feedback(args.api_base, args.scan_id, args.label, args.notes, args.api_key)
-        print(f"[OK] Feedback successfully submitted for scan #{args.scan_id}")
-        return 0
-
     if not args.url:
-        parser.error("url is required for scanning commands")
+        parser.error("URL required")
 
     if args.security:
-        result = run_security_scan(api_base=args.api_base, target_url=args.url, api_key=args.api_key)
+        result = run_security_scan(args.api_base, args.url, args.api_key)
         print_security_readable(result)
-        if result.status == "failed" or (result.score is not None and result.score < 80 and args.fail_on != "never"):
+
+        if result.score is not None and result.score < 80 and args.fail_on != "never":
             return 1
         return 0
-    else:
-        result = run_scan(api_base=args.api_base, target_url=args.url, api_key=args.api_key)
-        print_human_readable(result)
 
-        if args.fail_on == "never":
-            return 0
+    result = run_scan(args.api_base, args.url, args.api_key)
+    print_human_readable(result)
 
-        if result.prediction == "phishing":
-            return 1
-        if result.prediction == "suspicious" and args.fail_on == "suspicious":
-            return 1
+    if args.fail_on == "never":
         return 0
+
+    if result.prediction == "phishing":
+        return 1
+    if result.prediction == "suspicious" and args.fail_on == "suspicious":
+        return 1
+
+    return 0
 
 
 if __name__ == "__main__":
     raise SystemExit(main())
-
